@@ -157,7 +157,8 @@ export function createCopy(snapshot) {
       const base = id && issues.get(id)?.detail;
       if (!base) return miss(method, url.pathname, "issue not in the snapshot");
       if (typeof body.text !== "string" || Object.keys(body).length !== 1) return miss(method, url.pathname, "a note needs only text");
-      const noteId = newId();
+      const noteId = adopted ?? newId();
+      adopted = undefined;
       const note = { id: noteId, commentId: noteId, user: author(), sentry_app: null, type: "note", data: { text: body.text, comment_id: Number(noteId) }, dateCreated: micro(clock()), source: "mcp" };
       const change = { ...(changed(id) ?? {}) };
       change.numComments = (change.numComments ?? base.numComments) + 1;
@@ -172,8 +173,9 @@ export function createCopy(snapshot) {
   }
 
   let clock = () => new Date().toISOString();
+  let adopted;
   return {
-    begin(now) { clock = () => now; saved = structuredClone(state); misses = []; },
+    begin(now, noteId) { clock = () => now; adopted = noteId; saved = structuredClone(state); misses = []; },
     end() { const found = misses; if (found.length) state = saved; misses = []; return found; },
     handle(method, href, text) {
       const url = new URL(href, "https://sentry.io");

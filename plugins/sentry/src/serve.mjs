@@ -45,13 +45,23 @@ async function initialize(params) {
 async function call(params) {
   const message = JSON.parse(Buffer.from(params.raw.body, "base64").toString("utf8"));
   if (message.method !== "tools/call" || typeof message.params?.name !== "string") return { status: "unsupported", reason: "The Sentry copy answers tool calls only" };
-  copy.begin(params.now);
+  copy.begin(params.now, recordedNoteId(params.recorded));
   let answer, misses;
   try { answer = await server.request("tools/call", { name: message.params.name, arguments: message.params.arguments ?? {} }); }
   finally { misses = copy.end(); }
   if (misses.length) return { status: "unsupported", reason: `The Sentry copy cannot answer this like Sentry would: ${misses.join("; ")}` };
   const { jsonrpc, id: _, ...outcome } = answer;
   return { status: "answer", value: { body: Buffer.from(JSON.stringify({ jsonrpc, id: message.id, ...outcome })).toString("base64") } };
+}
+
+// When the engine runs a recorded write against the copy, it also sends the recorded answer. A note that write added
+// takes the id the agent was given, so later reads show the note the agent knows.
+function recordedNoteId(recorded) {
+  try {
+    const result = JSON.parse(Buffer.from(recorded?.body ?? "", "base64").toString("utf8")).result;
+    const id = JSON.parse(result.content.map(part => part.text ?? "").join("")).note?.id;
+    return typeof id === "string" ? id : undefined;
+  } catch { return undefined; }
 }
 
 const reply = (id, outcome) => process.stdout.write(JSON.stringify({ phoenix_plugin: 1, id, ...outcome }) + "\n");
