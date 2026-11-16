@@ -8,6 +8,10 @@ const identity = identities[call.name];
 const [connector, op] = identity ? [identity.server, identity.tool] : ["fx", call.name];
 let args;
 try { args = JSON.parse(call.arguments_json); } catch { args = { arguments_json: call.arguments_json }; }
+if (connector === "fx" && op === "shell" && typeof args.cwd === "string") {
+  const cwd = args.cwd.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  args = { ...args, cwd: cwd === "~" || cwd.startsWith("~/") ? process.env.HOME + cwd.slice(1) : cwd };
+}
 try {
   const response = await fetch(`${process.env.PHOENIX_TOOLS_URL}/${encodeURIComponent(connector)}`, {
     method: "POST",

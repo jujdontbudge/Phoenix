@@ -4,7 +4,7 @@ This recipe covers the native `vercel-labs/fx` ACP agent, not the JSON viewer of
 
 ## Put fx back in a moment
 
-This works on any saved fx session, with nothing from Phoenix attached when it was recorded. Phoenix copies the session, cuts it just before a user turn, and resumes fx from the cut inside the sealed box. fx talks straight to its own LLM. Phoenix answers every tool call, from the session's own tool results first. A `read_file`, `write_file`, `edit_file`, `grep_files` or `glob_files` call the session never made runs for real in the box, on the copy of the project's files. Any other new call gets a made-up answer, labeled in the result.
+This works on any saved fx session, with nothing from Phoenix attached when it was recorded. Phoenix copies the session, cuts it just before a user turn, and resumes fx from the cut inside the sealed box. fx talks straight to its own LLM. Phoenix answers every tool call, from the session's own tool results first. A `read_file`, `write_file`, `edit_file`, `grep_files` or `glob_files` call the session never made runs for real in the box, on the copy of the project's files. So does a `shell` command that only reads files, such as `cat` or `sed -n`, with every path inside the copy. Any other new call gets a made-up answer, labeled in the result.
 
 Build the box image once and put its id in the Workbench settings as `image`, with this recipe as `recipe`:
 
