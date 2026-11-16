@@ -114,7 +114,7 @@ export class Mailbox {
     const ms = Number(m.internalDate ?? 0);
     const from = { name: f.addressDisplayNames?.find(a => a.emailAddress === f.sender)?.displayName ?? "", email: f.sender ?? "" };
     const style = from.email === this.account.email ? this.apiStyle() : {};
-    m.raw = buildMessage({ from, to: (f.toRecipients ?? []).map(email => ({ name: "", email })), cc: (f.ccRecipients ?? []).map(email => ({ name: "", email })), subject: f.subject ?? "", text: f.plaintextBody ?? htmlText(f.htmlBody ?? "").trim(), html: f.htmlBody ?? "", date: rfc2822(new Date(ms), this.timezone, style.offset), messageId: `<${m.id}@mail.gmail.com>`, boundary: `000000000000${m.id}`, receivedFrom: style.receivedFrom });
+    m.raw = buildMessage({ from, to: (f.toRecipients ?? []).map(email => ({ name: m.names?.[email] ?? "", email })), cc: (f.ccRecipients ?? []).map(email => ({ name: m.names?.[email] ?? "", email })), subject: f.subject ?? "", text: f.plaintextBody ?? htmlText(f.htmlBody ?? "").trim(), html: f.htmlBody ?? "", date: rfc2822(new Date(ms), this.timezone, m.dateOffset ?? style.offset), messageId: `<${m.id}@mail.gmail.com>`, boundary: `000000000000${m.id}`, receivedFrom: style.receivedFrom });
     m.rawWritten = true;
     return m.raw;
   }
@@ -129,8 +129,15 @@ export class Mailbox {
     return this.file(raw, [...labels, ...(seen ? [] : ["UNREAD"]), ...(flagged ? ["STARRED"] : [])]);
   }
 
-  // A message sent through SMTP.
+  // A message sent through SMTP. Gmail adds a Message-ID and a Date, in Pacific time, when the message has none.
   submit(raw, recipients) {
+    const given = splitHead(raw).headers, nowMs = this.nowMs ?? Date.now(), added = [];
+    if (!header(given, "message-id")) {
+      const h = createHash("sha256").update(raw).update(String(nowMs)).digest("hex");
+      added.push(`Message-ID: <${h.slice(0, 8)}.${h.slice(8, 16)}.${h.slice(16, 22)}.${h.slice(22, 26)}@mx.google.com>`);
+    }
+    if (!header(given, "date")) added.push(`Date: ${rfc2822(new Date(nowMs), "America/Los_Angeles")}`);
+    if (added.length) raw = Buffer.concat([Buffer.from(added.join("\r\n") + "\r\n", "latin1"), raw]);
     const id = header(splitHead(raw).headers, "message-id");
     const same = id && [...this.messages.values()].find(m => m.raw && this.messageIdOf(m) === id);
     const self = recipients.some(r => r.toLowerCase() === this.account.email.toLowerCase());

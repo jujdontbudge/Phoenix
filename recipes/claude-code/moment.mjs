@@ -98,5 +98,5 @@ process.stdout.write(JSON.stringify({
   loadout: { system, mcp, tools: (shape.tools ?? []).map(tool => tool.name), world: [...world].filter(([, content]) => typeof content === "string" && content.length <= 1 << 20).map(([path, content]) => ({ path, content })) },
   answers,
   read_only: { [CONNECTOR]: READ_ONLY },
-  shell: { [CONNECTOR]: { Bash: { command: "command" } } },
+  shell: { [CONNECTOR]: { Bash: { command: "command", output: "/structuredContent/toolUseResult/stdout", exit: "isError" } } },
 }) + "\n");

@@ -53,7 +53,7 @@ async function sampleTrace(root: string): Promise<{ events: TraceEvent[]; body(e
 }
 
 function answerSources(trace: readonly TraceEvent[]): NonNullable<Sample["answers"]> {
-  const results = trace.filter(e => e.kind === "result" && e.stream.startsWith("stand-in"));
+  const results = trace.filter(e => e.kind === "result" && e.stream.startsWith("stand-in") && e.layer !== "under");
   const madeUp = results.filter(e => e.provenance === "synthesized");
   const afterUntaken = results.filter(e => e.after_untaken_write);
   return {

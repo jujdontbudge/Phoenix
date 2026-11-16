@@ -2,7 +2,7 @@
 // small SMTP server that files sent mail the way Gmail does. Real IMAP clients such as himalaya
 // talk to these instead of imap.gmail.com and smtp.gmail.com, so their own formatting stays real.
 import { createServer } from "node:net";
-import { addresses, decodeWords, header, splitHead } from "./mime.mjs";
+import { addresses, decodeWords, header, rfc2822, splitHead } from "./mime.mjs";
 
 const SYSTEM = [
   ["INBOX", "INBOX", []],
@@ -35,8 +35,8 @@ export class Folders {
 
   inFolder(m, entry) {
     const [, label] = entry;
-    if (label === null) return !m.labelIds.includes("TRASH") && !m.labelIds.includes("SPAM");
-    return m.labelIds.includes(label);
+    if (label !== "TRASH" && label !== "SPAM" && (m.labelIds.includes("TRASH") || m.labelIds.includes("SPAM"))) return false;
+    return label === null || m.labelIds.includes(label);
   }
 
   // Each folder keeps its own UIDs; a message keeps its UID while it stays in the folder.
@@ -45,8 +45,8 @@ export class Folders {
     if (!entry) return undefined;
     const state = this.status(name);
     const members = [...this.box.messages.values()].filter(m => this.inFolder(m, entry)).sort((a, b) => Number(a.internalDate ?? 0) - Number(b.internalDate ?? 0) || (a.id < b.id ? -1 : 1));
+    state.uidnext = Math.max(state.uidnext, ...members.filter(m => m.uids[name] !== undefined).map(m => m.uids[name] + 1));
     for (const m of members) if (m.uids[name] === undefined) m.uids[name] = state.uidnext++;
-    state.uidnext = Math.max(state.uidnext, ...members.map(m => m.uids[name] + 1));
     return members.sort((a, b) => a.uids[name] - b.uids[name]);
   }
 
@@ -55,7 +55,9 @@ export class Folders {
       const known = [...this.box.messages.values()].map(m => m.uids[name]).filter(u => u !== undefined);
       this.state.set(name, { uidvalidity: this.box.folderInfo?.[name]?.uidvalidity ?? 1, uidnext: Math.max(this.box.folderInfo?.[name]?.uidnext ?? 1, ...known.map(u => u + 1)) });
     }
-    return this.state.get(name);
+    const state = this.state.get(name);
+    state.uidnext = Math.max(state.uidnext, this.box.folderInfo?.[name]?.uidnext ?? 1);
+    return state;
   }
 
   flags(m, name) {
@@ -120,10 +122,10 @@ const addrList = value => {
 };
 const rawHeader = (headers, name) => headers.find(([n]) => n.toLowerCase() === name)?.[1];
 
-export function envelope(raw) {
+export function envelope(raw, arrived) {
   const { headers } = splitHead(raw);
   const from = rawHeader(headers, "from");
-  return `(${str(rawHeader(headers, "date"))} ${str(rawHeader(headers, "subject"))} ${addrList(from)} ${addrList(rawHeader(headers, "sender") ?? from)} ${addrList(rawHeader(headers, "reply-to") ?? from)} ${addrList(rawHeader(headers, "to"))} ${addrList(rawHeader(headers, "cc"))} ${addrList(rawHeader(headers, "bcc"))} ${str(rawHeader(headers, "in-reply-to"))} ${str(rawHeader(headers, "message-id"))})`;
+  return `(${str(rawHeader(headers, "date") ?? arrived)} ${str(rawHeader(headers, "subject"))} ${addrList(from)} ${addrList(rawHeader(headers, "sender") ?? from)} ${addrList(rawHeader(headers, "reply-to") ?? from)} ${addrList(rawHeader(headers, "to"))} ${addrList(rawHeader(headers, "cc"))} ${addrList(rawHeader(headers, "bcc"))} ${str(rawHeader(headers, "in-reply-to"))} ${str(rawHeader(headers, "message-id"))})`;
 }
 
 function contentType(headers) {
@@ -275,6 +277,13 @@ function sequence(set, members, uid, folderName) {
 
 export function startImap(box, { log } = {}) {
   const folders = new Folders(box);
+  // A folder whose records the copy can't tell apart from each other answers nothing.
+  const unsure = name => {
+    const entry = folders.find(name);
+    if (!entry || !(box.unsettled?.has(entry[1]) || folders.messages(name).some(m => m.ambiguous))) return false;
+    box.missed = `the copy can't tell which of its records in ${entry[0]} are the same message`;
+    return true;
+  };
   const server = createServer(socket => {
     let selected = null, readOnly = false;
     const send = line => { log?.("S: " + line.slice(0, 300)); socket.write(line + "\r\n"); };
@@ -318,6 +327,7 @@ export function startImap(box, { log } = {}) {
           }
           case "STATUS": {
             const name = String(args[0]);
+            if (unsure(name)) return no(`[UNAVAILABLE] ${box.missed}`);
             const members = folders.messages(name);
             if (!members) return no("[NONEXISTENT] Unknown Mailbox");
             const st = folders.status(name);
@@ -328,6 +338,7 @@ export function startImap(box, { log } = {}) {
           }
           case "SELECT": case "EXAMINE": {
             const name = String(args[0]);
+            if (unsure(name)) { selected = null; return no(`[UNAVAILABLE] ${box.missed}`); }
             const members = folders.messages(name);
             if (!members) { selected = null; return no("[NONEXISTENT] Unknown Mailbox"); }
             selected = folders.find(name)[0]; readOnly = cmd === "EXAMINE";
@@ -354,7 +365,10 @@ export function startImap(box, { log } = {}) {
             if (!entry) return no("[TRYCREATE] Folder doesn't exist.");
             const raw = Buffer.from(args.at(-1), "utf8");
             const flags = Array.isArray(args[1]) ? args[1].map(String) : [];
+            folders.messages(name);
+            const held = new Set(box.messages.keys());
             const m = box.receive(raw, { labels: entry[1] ? [entry[1]] : [], seen: flags.includes("\\Seen"), flagged: flags.includes("\\Flagged") });
+            if (held.has(m.id) && m.uids[name] !== undefined) { delete m.uids[name]; m.realUids?.delete(name); }
             const members = folders.messages(name);
             return ok(`[APPENDUID ${folders.status(name).uidvalidity} ${m.uids[name] ?? members.at(-1)?.uids[name]}] (Success)`);
           }
@@ -389,7 +403,7 @@ export function startImap(box, { log } = {}) {
                 else if (up === "FLAGS") out.push(`FLAGS (${folders.flags(m, selected).join(" ")})`);
                 else if (up === "INTERNALDATE") out.push(`INTERNALDATE ${imapDate(m.internalDate)}`);
                 else if (up === "RFC822.SIZE") out.push(`RFC822.SIZE ${raw.length}`);
-                else if (up === "ENVELOPE") out.push(`ENVELOPE ${envelope(raw)}`);
+                else if (up === "ENVELOPE") out.push(`ENVELOPE ${envelope(raw, rfc2822(new Date(Number(m.internalDate)), "America/Los_Angeles"))}`);
                 else if (up === "BODYSTRUCTURE" || up === "BODY") out.push(`${up} ${bodystructure(tree(raw), up === "BODYSTRUCTURE")}`);
                 else if (up === "X-GM-MSGID") out.push(`X-GM-MSGID ${BigInt("0x" + m.id)}`);
                 else if (up === "X-GM-THRID") out.push(`X-GM-THRID ${BigInt("0x" + m.threadId)}`);

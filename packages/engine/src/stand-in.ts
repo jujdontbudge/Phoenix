@@ -1,8 +1,9 @@
 import { createServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { text } from "node:stream/consumers";
-import { answerCall, answeredOutside, Emulators, replayCtx, toCall, type ConnectorPolicy, type EmulatorConfig, type Divergence, type Exchange, type ExchangeIndex, type SimulatorOptions } from "@phoenix/answer";
+import { answerCall, answeredOutside, cliShape, Emulators, replayCtx, toCall, type CliReplayFrame, type ConnectorPolicy, type EmulatorConfig, type Divergence, type Exchange, type ExchangeIndex, type SimulatorOptions } from "@phoenix/answer";
 import type { CaptureMetadata } from "@phoenix/store";
+import { CLI_STREAM } from "@phoenix/taps";
 import { VirtualClock } from "./clock.ts";
 import { SampleTrace, streamName } from "./trace.ts";
 
@@ -22,6 +23,7 @@ export interface ToolStandInOptions {
   answers: readonly RecordedToolAnswer[];
   policy(connector: string): ConnectorPolicy;
   inBox?(connector: string, op: string, args: unknown): boolean;
+  pluginCommand?(connector: string, op: string, args: unknown): { calls: { connector: string; argv: string[]; env: Record<string, string>; cwd: string; stdin?: string }[]; around: string } | undefined;
   simulator?: Omit<SimulatorOptions, "clock">;
   emulators?: readonly EmulatorConfig[];
   cutTime?: string;
@@ -75,7 +77,41 @@ export async function startToolStandIn(options: ToolStandInOptions): Promise<Too
       const call = toCall({ surface: "mcp", connector, op: `tools/call:${message.params.name}`, args: message.params.arguments ?? {}, raw: { body } }, policy(connector));
       await trace.append(stream, { kind: "call", surface: "mcp", layer: "agent", connector, op: call.op, body });
       const inBox = options.inBox?.(connector, message.params.name, message.params.arguments ?? {}) ?? false;
-      const answered = await answerCall(call, ctx, inBox ? ["simulator"] : []);
+      const command = options.pluginCommand?.(connector, message.params.name, message.params.arguments ?? {});
+      const routed = command?.calls.every(c => emulators.has(c.connector)) ? command : undefined;
+      let answered = await answerCall(call, ctx, inBox || routed ? ["simulator"] : []);
+      if ("divergence" in answered && routed) {
+        const outputs: { stdout: string; stderr: string; exit_code: number }[] = [];
+        let miss: string | undefined;
+        for (const { connector: plugin, argv, env, cwd, stdin } of routed.calls) {
+          const invocation = { argv, cwd, env, terminals: { stdin: null, stdout: null, stderr: null } };
+          const cliBody = Buffer.from(JSON.stringify(invocation));
+          const cliStream = streamName("stand-in", plugin);
+          const cli = { ...toCall({ surface: "cli", layer: "under", connector: plugin, ...cliShape(invocation), raw: { body: cliBody } }, policy(plugin)), stdin: async () => Buffer.from(stdin ?? "") };
+          await trace.append(cliStream, { kind: "call", surface: "cli", layer: "under", connector: plugin, op: cli.op, body: cliBody });
+          const copied = await emulators.resolve(cli);
+          if ("miss" in copied) {
+            miss = copied.why;
+            await trace.append(cliStream, { kind: "meta", connector: plugin, op: "plugin-copy.miss", body: Buffer.from(copied.why) });
+            break;
+          }
+          const frames = JSON.parse(Buffer.from(copied.raw.body).toString()) as CliReplayFrame[];
+          const bytes = (stream: number) => Buffer.concat(frames.filter(f => f.dir === "back" && f.stream === stream).map(f => Buffer.from(f.bytes, "base64"))).toString();
+          const exit = JSON.parse(bytes(CLI_STREAM.control) || "{}") as { code?: number | null };
+          const output = { stdout: bytes(CLI_STREAM.stdout), stderr: bytes(CLI_STREAM.stderr), exit_code: exit.code ?? 1 };
+          outputs.push(output);
+          await trace.append(cliStream, { kind: "result", surface: "cli", layer: "under", connector: plugin, op: cli.op, body: Buffer.from(JSON.stringify(output)), provenance: copied.provenance, resolver: copied.resolver });
+        }
+        if (miss === undefined) {
+          const reply = rpc(message.id, { command_output: { command: routed.around, outputs } });
+          answeredOutside(call, { raw: { body: reply }, provenance: "derived", resolver: "emulator" }, ctx);
+          served++;
+          await trace.append(stream, { kind: "result", surface: "mcp", layer: "agent", connector, op: call.op, body: reply, provenance: "derived", resolver: "emulator" });
+          response.end(reply);
+          return;
+        }
+        if (!inBox) answered = await answerCall(call, ctx);
+      }
       if ("divergence" in answered && inBox) {
         const reply = rpc(message.id, { run_in_box: true });
         answeredOutside(call, { raw: { body: reply }, provenance: "real", resolver: "files-copy" }, ctx);

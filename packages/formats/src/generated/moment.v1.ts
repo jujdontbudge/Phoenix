@@ -210,6 +210,10 @@ export type MomentManifest = {
        */
       taken_at: string;
       /**
+       * The home folder on the machine where the session ran. A leading ~ in a new shell command means this folder.
+       */
+      home?: string;
+      /**
        * Bundle paths of more tar files, when the copy is too big for one. Unpack them after tar, into the same folder.
        */
       more?: string[];

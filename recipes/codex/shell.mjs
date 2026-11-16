@@ -2,6 +2,9 @@
 // Stands in for the user's shell inside the box. Codex runs each command as `<shell> -lc <command>`;
 // Phoenix answers it from the session, or says to run it for real on the copy of the project's files.
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const args = process.argv.slice(2);
 const flag = args.findIndex(arg => /^-[a-z]*c[a-z]*$/.test(arg));
@@ -20,6 +23,19 @@ if (reply.run_in_box) {
   const ran = spawnSync("/usr/local/lib/phoenix-dash", ["-c", command], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const output = (ran.stdout ?? "") + (ran.stderr ?? "");
   await ask("phoenix/ran", { result: { output, exit_code: ran.status ?? 1, content: [{ type: "text", text: output }], structuredContent: { output, exit_code: ran.status ?? 1 }, isError: ran.status !== 0 } });
+  process.stdout.write(ran.stdout ?? "");
+  process.stderr.write(ran.stderr ?? "");
+  process.exitCode = ran.status ?? 1;
+} else if (reply.command_output) {
+  const folder = mkdtempSync(join(tmpdir(), "phoenix-output-"));
+  const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+  const printing = ({ command, outputs }) => command.replace(/\u0000(\d+)\u0000/g, (_, i) => {
+  const out = join(folder, i + ".out"), err = join(folder, i + ".err");
+  writeFileSync(out, outputs[i].stdout);
+  writeFileSync(err, outputs[i].stderr);
+  return "(cat " + quote(out) + "; cat " + quote(err) + " >&2; exit " + outputs[i].exit_code + ")";
+});
+  const ran = spawnSync("/usr/local/lib/phoenix-dash", ["-c", printing(reply.command_output)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   process.stdout.write(ran.stdout ?? "");
   process.stderr.write(ran.stderr ?? "");
   process.exitCode = ran.status ?? 1;

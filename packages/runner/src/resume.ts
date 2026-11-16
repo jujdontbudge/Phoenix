@@ -3,13 +3,14 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { readsOnly, startToolStandIn, type SimulatorOptions, type ToolStandIn, type ToolStandInOptions } from "@phoenix/engine";
+import { readsOnly, recognizeCommand, startToolStandIn, type SimulatorOptions, type ToolStandIn, type ToolStandInOptions } from "@phoenix/engine";
 import { parse } from "yaml";
 import type { RecipeDescriptor } from "@phoenix/formats";
 import { writeClockFile, type Sandbox, type SandboxProcess } from "@phoenix/sandbox";
 import type { MomentBundle } from "@phoenix/store";
 import type { ResolvedPlan } from "./plan.ts";
 import { optional, save } from "./files.ts";
+import { pastCommand, type ShellTool } from "./past-commands.ts";
 
 const execute = promisify(execFile);
 const TOOLS_HOST = "phoenix-tools";
@@ -21,7 +22,7 @@ interface SessionMoment {
   loadout: unknown;
   box?: unknown;
   in_box?: Record<string, string[]>;
-  shell?: Record<string, Record<string, { command: string; cwd?: string }>>;
+  shell?: Record<string, Record<string, ShellTool>>;
   cwd?: string;
   answers: { id: string; connector: string; op: string; args: unknown; result: unknown; observed_at: string; before_cut: boolean; world?: "exact" | "any-args" }[];
 }
@@ -91,6 +92,9 @@ export async function resumeAttempt(input: {
   const plugins = new Map<string, { plugin: ResolvedPlan["runner"]["plugins"][number]; index: number }>();
   for (const [index, plugin] of plan.runner.plugins.entries()) for (const name of names)
     if (!plugins.has(name) && (name === plugin.descriptor.connector || plugin.descriptor.recognize.mcp_servers?.includes(name))) plugins.set(name, { plugin, index });
+  for (const [index, plugin] of plan.runner.plugins.entries())
+    if (plugin.descriptor.recognize.commands?.length && !plugins.has(plugin.descriptor.connector) && ![...plugins.values()].some(p => p.index === index)) plugins.set(plugin.descriptor.connector, { plugin, index });
+  const commandPlugins = [...plugins].filter(([, { plugin }]) => plugin.descriptor.serve).map(([name, { plugin }]) => ({ ...plugin.descriptor, connector: name }));
   const time = bundle.manifest.clock?.time ?? new Date().toISOString();
   const emulators: NonNullable<ToolStandInOptions["emulators"]>[number][] = [];
   for (const [name, { plugin, index }] of plugins) {
@@ -100,10 +104,18 @@ export async function resumeAttempt(input: {
     const all = moment.answers.filter(a => a.connector === name);
     const firstWrite = all.findIndex(a => !a.before_cut && !plugin.descriptor.read_only?.includes(`tools/call:${a.op}`));
     const own = all.filter((a, at) => a.before_cut || firstWrite < 0 || at < firstWrite || (a.world && plugin.descriptor.read_only?.includes(`tools/call:${a.op}`)));
-    const snapshot = own.flatMap((a, seq) => [
-      { v: 1, capture: input.capture, stream: "session", seq: seq * 2, ts: { wall: a.observed_at }, kind: "call", connector: plugin.descriptor.connector, surface: "mcp", op: `tools/call:${a.op}`, body: { inline: JSON.stringify({ jsonrpc: "2.0", id: seq, method: "tools/call", params: { name: a.op, arguments: a.args } }) } },
-      { v: 1, capture: input.capture, stream: "session", seq: seq * 2 + 1, ts: { wall: a.observed_at }, kind: "result", connector: plugin.descriptor.connector, surface: "mcp", op: `tools/call:${a.op}`, body: { inline: JSON.stringify({ jsonrpc: "2.0", id: seq, result: a.result }) } },
-    ].map(event => JSON.stringify(event) + "\n")).join("");
+    const mine = new Set(own);
+    const commander = plugin.descriptor.recognize.commands?.length ? { ...plugin.descriptor, connector: name } : undefined;
+    let last = -Infinity, seq = 0;
+    const steps = moment.answers.map((a, at) => {
+      const time = Date.parse(a.observed_at);
+      last = Number.isFinite(time) ? time : last;
+      return { a, at, time: last };
+    }).sort((x, y) => x.time - y.time);
+    const snapshot = steps.flatMap(({ a, at }) => mine.has(a) ? [
+      { v: 1, capture: input.capture, stream: "session", seq: seq++, ts: { wall: a.observed_at }, kind: "call", connector: plugin.descriptor.connector, surface: "mcp", op: `tools/call:${a.op}`, body: { inline: JSON.stringify({ jsonrpc: "2.0", id: at, method: "tools/call", params: { name: a.op, arguments: a.args } }) } },
+      { v: 1, capture: input.capture, stream: "session", seq: seq++, ts: { wall: a.observed_at }, kind: "result", connector: plugin.descriptor.connector, surface: "mcp", op: `tools/call:${a.op}`, body: { inline: JSON.stringify({ jsonrpc: "2.0", id: at, result: a.result }) } },
+    ] : commander ? pastCommand(a, moment.shell?.[a.connector]?.[a.op], commander, moment.cwd, { capture: input.capture, stream: `session-cli-${at}`, connector: plugin.descriptor.connector }, commandPlugins) : []).map(event => JSON.stringify(event) + "\n").join("");
     await writeFile(join(pluginRoot, "inputs/snapshot"), plugin.snapshot ? bundle.files.get(plugin.snapshot)! : snapshot, { mode: 0o600 });
     await writeFile(join(pluginRoot, "inputs/seed"), plugin.seed ? bundle.files.get(plugin.seed)! : JSON.stringify({ seed: `sha256:${createHash("sha256").update(`${input.id}:${input.capture}`).digest("hex")}` }), { mode: 0o600 });
     await writeClockFile(join(pluginRoot, "clock"), time);
@@ -120,6 +132,17 @@ export async function resumeAttempt(input: {
       const given = args as Record<string, unknown>;
       const command = shell && given[shell.command], cwd = (shell?.cwd ? given[shell.cwd] : undefined) ?? moment.cwd;
       return typeof command === "string" && readsOnly(command, project.root, typeof cwd === "string" ? cwd : undefined, join(box, "project"));
+    },
+    pluginCommand: (connector, op, args) => {
+      const shell = moment.shell?.[connector]?.[op];
+      const given = args as Record<string, unknown>;
+      const command = shell && given[shell.command], givenCwd = (shell?.cwd ? given[shell.cwd] : undefined) ?? moment.cwd;
+      const found = typeof command === "string" ? recognizeCommand(command, commandPlugins, project?.home) : undefined;
+      if (!found || found.calls.some(c => c.conditional)) return undefined;
+      const cwd = typeof givenCwd === "string" ? givenCwd : undefined;
+      const rest = found.around.replace(/\u0000\d+\u0000/g, "true");
+      const guarded = project ? readsOnly(rest, project.root, cwd, join(box, "project")) : /^true(?: [12]>& '[12]'| (?:[12]?>>?|&>) '\/dev\/null')*$/.test(rest);
+      return guarded ? { calls: found.calls.map(c => ({ connector: c.connector, argv: c.argv, env: c.env ?? {}, cwd: cwd ?? project?.root ?? "/", ...(c.stdin === undefined ? {} : { stdin: c.stdin }) })), around: found.around } : undefined;
     },
     ...(input.simulator ? { simulator: input.simulator } : {}),
     cutTime: bundle.manifest.clock?.time ?? new Date().toISOString(),

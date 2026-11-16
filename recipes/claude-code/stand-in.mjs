@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONNECTOR, NATIVE, callArgs } from "./tools.mjs";
 
@@ -35,6 +35,18 @@ if (reply.run_in_box) {
   writeFileSync(slot + ".ran", "");
   log("files-copy");
   say({ permissionDecision: "allow" });
+  process.exit(0);
+}
+if (reply.command_output && name === "Bash") {
+  mkdirSync(slot + ".outputs", { recursive: true });
+  const printing = ({ command, outputs }) => command.replace(/\u0000(\d+)\u0000/g, (_, i) => {
+  const out = join(slot + ".outputs", i + ".out"), err = join(slot + ".outputs", i + ".err");
+  writeFileSync(out, outputs[i].stdout);
+  writeFileSync(err, outputs[i].stderr);
+  return "(cat " + quote(out) + "; cat " + quote(err) + " >&2; exit " + outputs[i].exit_code + ")";
+});
+  log("plugin-copy");
+  say({ permissionDecision: "allow", updatedInput: { ...input.tool_input, command: printing(reply.command_output) } });
   process.exit(0);
 }
 if (reply.error) {

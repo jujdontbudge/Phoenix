@@ -83,7 +83,7 @@ const qp = text => Buffer.from(text, "utf8").toString("latin1").split(/\r?\n/).m
   }
   return out.replace(/ $/, "=20");
 }).join("\r\n");
-const formatAddress = a => a.name ? `${encodeWord(a.name)} <${a.email}>` : a.email;
+const formatAddress = a => !a.name ? a.email : /^[\x20-\x7e]*$/.test(a.name) && /[()<>[\]:;@\\,."]/.test(a.name) ? `"${a.name.replace(/(["\\])/g, "\\$1")}" <${a.email}>` : `${encodeWord(a.name)} <${a.email}>`;
 
 // Writes a message the way Gmail writes a plain message sent from its API: text and HTML alternatives.
 export function buildMessage({ from, to = [], cc = [], bcc = [], subject = "", text, html, date, messageId, inReplyTo, references, boundary, receivedFrom }) {

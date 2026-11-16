@@ -93,5 +93,5 @@ process.stdout.write(JSON.stringify({
   answers,
   read_only: { pi: ["read", "grep", "find", "ls"], [ADAPTER]: METADATA },
   in_box: { pi: ["read", "write", "edit", "ls", "grep", "find"] },
-  shell: { pi: { bash: { command: "command" } } },
+  shell: { pi: { bash: { command: "command", exit: "isError" } } },
 }) + "\n");

@@ -246,7 +246,7 @@ export async function createSessionMoment(o: SessionMomentOptions): Promise<Mome
     resume: {
       recipe: o.recipe.descriptor.name, session: "data/session.jsonl", moment: "data/session-moment.json",
       ...(reading.files?.length ? { files: "data/session-files" } : {}),
-      ...(copy ? { project: { tar: "data/project.tar", ...(copy.parts.length > 1 ? { more: copy.parts.slice(1).map((_, index) => `data/project.${index + 1}.tar`) } : {}), root: copy.root, source: copy.source, ...(copy.commit ? { commit: copy.commit } : {}), taken_at: copy.taken_at, left_out: copy.left_out, ...(copy.bytes === undefined ? {} : { bytes: copy.bytes, files: copy.files }) } } : {}),
+      ...(copy ? { project: { tar: "data/project.tar", ...(copy.parts.length > 1 ? { more: copy.parts.slice(1).map((_, index) => `data/project.${index + 1}.tar`) } : {}), root: copy.root, home: homedir(), source: copy.source, ...(copy.commit ? { commit: copy.commit } : {}), taken_at: copy.taken_at, left_out: copy.left_out, ...(copy.bytes === undefined ? {} : { bytes: copy.bytes, files: copy.files }) } } : {}),
       ...(taken && "not_copied" in taken ? { files_not_copied: taken.not_copied } : {}),
       ...(o.fromBeginning ? { from_beginning: true } : {}),
       ...(reading.edits?.length ? { changed_answers: reading.edits.map(edit => edit.line) } : {}),

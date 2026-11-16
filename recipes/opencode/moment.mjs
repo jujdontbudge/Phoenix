@@ -47,5 +47,5 @@ process.stdout.write(JSON.stringify({
   answers,
   read_only: { opencode: ["read", "glob", "grep", "webfetch", "websearch", "skill"] },
   in_box: { opencode: IN_BOX },
-  shell: { opencode: { bash: { command: "command", cwd: "workdir" } } },
+  shell: { opencode: { bash: { command: "command", cwd: "workdir", output: "/structuredContent/metadata/output", exit: "/structuredContent/metadata/exit" } } },
 }) + "\n");

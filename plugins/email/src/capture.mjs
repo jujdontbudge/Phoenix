@@ -4,10 +4,12 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
+import { valued } from "./learn.mjs";
 
 const descriptor = JSON.parse(await readFile(new URL("../phoenix-plugin.json", import.meta.url), "utf8"));
 const MESSAGE_RESULTS = new Set(["get_message", "send_message", "reply", "forward"]);
 const DRAFT_RESULTS = new Set(["create_draft", "update_draft", "get_draft"]);
+const HEADERS = ["From", "To", "Cc", "Subject", "Date", "Message-ID", "In-Reply-To", "References"];
 let calls = { mcp: [], cli: [] };
 let initialized = false;
 
@@ -73,9 +75,17 @@ async function plan(segments) {
     const at = argv.findIndex((word, i) => i > 0 && ((word === "envelope" && argv[i + 1] === "list") || (word === "message" && argv[i + 1] === "read")));
     if (at < 0) continue;
     const [group, action] = argv.slice(at, at + 2);
-    const options = [...argv.slice(1, at), ...argv.slice(at + 2)];
-    const read = group === "envelope" ? ["himalaya", group, action, ...options] : ["himalaya", group, action, "--preview", ...options.filter(a => a !== "--preview" && a !== "-p")];
-    reads.set(JSON.stringify(read), read);
+    const options = [], ids = [];
+    for (let i = 1; i < argv.length; i++) {
+      if (i === at || i === at + 1) continue;
+      const a = argv[i];
+      if (["-o", "--output", "-H", "--header"].includes(a)) { i++; continue; }
+      if (a.startsWith("--output=") || a.startsWith("--header=") || a === "--preview" || (a === "-p" && group === "message")) continue;
+      if (valued(argv, a)) { options.push(a, argv[++i]); continue; }
+      if (group === "message" && /^\d+$/.test(a)) ids.push(a); else options.push(a);
+    }
+    const plan = group === "envelope" ? [["himalaya", group, action, ...options, "-o", "json"]] : ids.map(id => ["himalaya", group, action, "--preview", ...options, "-o", "json", ...HEADERS.flatMap(h => ["-H", h]), id]);
+    for (const read of plan) reads.set(JSON.stringify(read), read);
   }
   const cli = commands.length ? [["himalaya", "folder", "list"], ...reads.values()].map(argv => ({ op: "himalaya", args: { argv: ["himalaya", ...argv.slice(1)] } })) : [];
   if (!used) return { mcp: [], cli };
