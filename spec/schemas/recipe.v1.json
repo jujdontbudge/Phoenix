@@ -62,50 +62,6 @@
         }
       }
     },
-    "model": {
-      "type": "object",
-      "required": [
-        "setting",
-        "dialect"
-      ],
-      "properties": {
-        "setting": {
-          "type": "string",
-          "description": "The model base-URL setting."
-        },
-        "dialect": {
-          "type": "string"
-        },
-        "login_context": {
-          "type": "array",
-          "description": "Context the harness injects into model-request history depending on how it is signed in. The frozen-prefix comparison leaves out history text blocks whose whole text matches a pattern and reports every difference in them.",
-          "items": {
-            "type": "object",
-            "required": [
-              "name",
-              "pattern",
-              "reason"
-            ],
-            "properties": {
-              "name": {
-                "type": "string",
-                "minLength": 1
-              },
-              "pattern": {
-                "type": "string",
-                "minLength": 1,
-                "description": "A JavaScript regular expression that must match a history text block's whole text."
-              },
-              "reason": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Why the harness injects this context and why it depends on the login."
-              }
-            }
-          }
-        }
-      }
-    },
     "mcp": {
       "type": "object",
       "required": [

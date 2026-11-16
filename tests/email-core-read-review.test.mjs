@@ -47,7 +47,7 @@ test("S11: a read-only CLI call does not disable recorded attachment fallback", 
     } };
   } };
   const engine = await startEngine({
-    evidence: { events, body: async event => Buffer.from(event.body.inline) }, start: "beginning",
+    evidence: { events, body: async event => Buffer.from(event.body.inline) },
     connectors: { email: { read_only: plugin.descriptor.read_only.map(op => ({ op, source: "plugin" })) } },
     routes: {}, hmacKey: Buffer.alloc(32, 1),
     emulators: [{ plugin, options: {

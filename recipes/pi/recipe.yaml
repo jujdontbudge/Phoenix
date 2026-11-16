@@ -5,13 +5,13 @@ login_modes: [api-key, oauth, subscription, ambient-cloud, extension, unauthenti
 routes:
   - versions: "1.5.2"
     login_mode: api-key
-    surfaces: {model: [gateway, transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
+    surfaces: {model: [transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
   - versions: "1.5.2"
     login_mode: oauth
-    surfaces: {model: [gateway, transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
+    surfaces: {model: [transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
   - versions: "1.5.2"
     login_mode: subscription
-    surfaces: {model: [gateway, transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
+    surfaces: {model: [transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
   - versions: "1.5.2"
     login_mode: ambient-cloud
     surfaces: {model: [transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
@@ -20,10 +20,7 @@ routes:
     surfaces: {model: [transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
   - versions: "1.5.2"
     login_mode: unauthenticated
-    surfaces: {model: [gateway, transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
-model:
-  setting: "PI_CODING_AGENT_DIR/models.json: providers.<provider>.baseUrl (run.mjs maps PHOENIX_MODEL_BASE_URL)"
-  dialect: "provider-selected; openai-codex-responses uses openai-responses"
+    surfaces: {model: [transcript], mcp: [mcp-proxy, transcript], cli: [cli-proxy, transcript]}
 configuration:
   mcp:
     file: "~/.pi/agent/mcp.json + .pi/mcp.json; adapter: explicit --mcp-config"
@@ -50,10 +47,7 @@ resume:
     openai-codex: [chatgpt.com]
     opencode-go: [opencode.ai]
 limitations:
-  - "Gateway is opt-in for one explicit provider/model and an unchanged upstream; no provider or billing-route substitution."
-  - "Codex OAuth honors baseUrl; gateway capture selects Pi's supported SSE transport, not WebSocket."
-  - "The observed Codex SSE client cancels after response.completed; HTTP capture results remain partial and current runner echo blocks. Transcript import still works; never clear partial flags."
-  - "Copilot OAuth replaces model URLs with token-bound endpoints: use transcript, not gateway."
+  - "Phoenix never sits between Pi and its LLM: capture leaves models.json and settings.json as they are, and the LLM side comes only from Pi's own session file."
   - "Radius catalog auth, ambient Bedrock/Vertex/federation, and arbitrary extension transports use transcript unless independently verified."
   - "Stdio MCP is proxied. Anonymous/fixed-header Streamable HTTP needs explicit per-server PHOENIX_PI_MCP_REVERSE authorization; OAuth, SSE and expanded URLs stay unchanged and use transcript. No OAuth resource or CA changes."
   - "MCP tools registered by extensions outside the selected config are transcript-only."

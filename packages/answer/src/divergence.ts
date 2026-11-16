@@ -1,10 +1,6 @@
 export type DivergenceTrigger =
   | "no-answer"
   | "unmapped-connection"
-  | "prefix-drift"
-  | "not-inference"
-  | "live-world"
-  | "provider-state"
   | "lifecycle";
 
 export interface Divergence {

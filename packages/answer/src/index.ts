@@ -1,11 +1,10 @@
 export type { Answer, Call, CallMessage, ConnectorPolicy, Exchange, ExchangeIndex, Miss, Provenance, ReplayCtx, Resolver, ResolverName, WireMessage } from "./types.ts";
 export type { Divergence, DivergenceTrigger } from "./divergence.ts";
-export { buildIndex, type StartPoint } from "./exchanges.ts";
+export { buildIndex } from "./exchanges.ts";
 export { httpHost, httpShape, isReadOnly, mcpShape, sameReply, toCall } from "./normalize.ts";
-export { answerCall, answeredOutside, matchFrozen, replayCtx } from "./chain.ts";
+export { answerCall, answeredOutside, replayCtx } from "./chain.ts";
 export { resolvers } from "./resolvers/index.ts";
 export { Emulators, EmulatorStartError, type EmulatorConfig, type EmulatorDifference } from "./emulators.ts";
 export { createSimulator, SimulatorStore, type SimulatorOptions } from "./simulator.ts";
-export { checkModelRequest, comparePrefixRequest, isModelDialect, resolveModelDialect, modelInferencePath, selectModelRequest, type LoginContext, type LoginContextDifference, type ModelDialectName, type PrefixComparison } from "./model.ts";
 export { cliShape, type CliReplayFrame } from "./cli.ts";
 export { mcpHttpShape } from "./mcp-http.ts";

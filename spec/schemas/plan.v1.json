@@ -71,27 +71,9 @@
       }
     },
     "start": {
-      "oneOf": [
-        {
-          "enum": [
-            "beginning",
-            "mark",
-            "echo"
-          ]
-        },
-        {
-          "type": "object",
-          "required": [
-            "at"
-          ],
-          "properties": {
-            "at": {
-              "type": "string",
-              "minLength": 1,
-              "description": "An event id within a capture."
-            }
-          }
-        }
+      "enum": [
+        "beginning",
+        "mark"
       ]
     },
     "samples": {
@@ -161,27 +143,6 @@
       },
       "minItems": 1,
       "description": "A command as an argv array, never a joined shell string."
-    },
-    "login_context": {
-      "type": "array",
-      "description": "The recipe's declared login context, copied from recipe.yaml model.login_context.",
-      "items": {
-        "type": "object",
-        "required": [
-          "name",
-          "pattern"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "pattern": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      }
     },
     "matching_rules": {
       "type": "string",

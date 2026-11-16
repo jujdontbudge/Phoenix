@@ -1,21 +1,18 @@
 # Checks
 
-`evaluateCheck(check, { trace, startAfter?, blobs? }, { expectedStates?, custom? })`
+`evaluateCheck(check, { trace, blobs? }, { expectedStates?, custom? })`
 is the runner's entry point. Inputs use `@phoenix/formats`; `trace` is one
-sample attempt in store order, including its imposed prefix. `startAfter` is
-the id immediately before the continuation (omit it for the beginning).
+sample attempt in store order.
 `blobs` supplies already-read UTF-8 bodies by digest, so evaluators do no I/O.
 `expectedStates` supplies parsed locked expected-state files, keyed by the
 `equals` path. A missing or undecodable input becomes an expectation error,
 not a pass. An invalid check is refused.
 
-Actions come from agent-layer tap calls, or model-response tool-use blocks
-when the tool has no tap. Model requests are never counted as new actions.
+Actions are the agent-layer tool calls in the trace. The harness's LLM
+traffic is never in the trace, so it is never an action.
 MCP tools are named `connector.tool`, CLI operations `connector.op` (arguments
 are the invocation object, including `argv`), and direct HTTP operations `connector.METHOD path`.
-A unique same-name/same-arguments tap call between two model responses is
-paired with its model block for turn/position order. Ambiguity uses tap order
-and is noted. Under-layer traffic is never an action.
+Under-layer traffic is never an action.
 
 Argument objects match their specified fields recursively; arrays and scalar
 values match exactly. `{ not: value }` negates that field's matcher. `called`
@@ -27,14 +24,15 @@ cannot. `max_calls` and `not_called` likewise preserve irreversible failures
 on divergence. All expectations run, even after a failure.
 
 The engine records final state using `kind: meta`, `op: end_state`,
-`connector`, and a JSON state in `body`. Final harness text can use `kind:
-meta`, `op: final_text`, with the literal text in `body`; otherwise it is
-extracted from the last model response containing assistant text. These use
+`connector`, and a JSON state in `body`. Final harness text is a `kind:
+meta`, `op: final_text` event with the literal text in `body`. A recipe's
+resume path writes it from the harness's own last reply; for a harness run
+from the beginning with `run.output: stdout`, the runner writes the harness's
+standard output. With neither, a `final_text` expectation has no evidence. These use
 the trace's existing opaque-body mechanism and don't change the schema.
 
 `sampleVerdict` consumes the evaluation, optional intent judgment and divergence
-flag. Taint is forward from the first synthesized result, including an imposed
-prefix. Positive existence checks can be proved by their first witness; exact
+flag. Taint is forward from the first synthesized result. Positive existence checks can be proved by their first witness; exact
 counts, absence and order read through the end. Custom checks conservatively
 read the entire scope. Check errors and unresolved tainted failures are
 unassessed. A clean failure is binding. `momentVerdict` retains missing and
@@ -44,7 +42,7 @@ more failures fails the moment. `compareBaseline` checks the strictly higher
 passing share; `countsTowardPass` gates set/patch claims on confirmation.
 
 `confirmDiscount` accepts either a result-hash-specific ledger entry read by
-store, or a clean passing replay of the same candidate/check/model/start. A
+store, or a clean passing replay of the same candidate/check/LLM/start. A
 fresh-recording confirmation must use a new locked revision. The replacement
 trace must show emulator answers, or recorded/real answers, on every connector
 that supplied synthesized evidence. Call matching, write-history validity and

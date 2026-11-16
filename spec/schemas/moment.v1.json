@@ -45,26 +45,9 @@
       "description": "An event id within a capture."
     },
     "start": {
-      "oneOf": [
-        {
-          "enum": [
-            "beginning",
-            "mark"
-          ]
-        },
-        {
-          "type": "object",
-          "required": [
-            "at"
-          ],
-          "properties": {
-            "at": {
-              "type": "string",
-              "minLength": 1,
-              "description": "An event id within a capture."
-            }
-          }
-        }
+      "enum": [
+        "beginning",
+        "mark"
       ],
       "description": "Default start point."
     },
@@ -412,7 +395,12 @@
         },
         "project": {
           "type": "object",
-          "required": ["tar", "root", "source", "taken_at"],
+          "required": [
+            "tar",
+            "root",
+            "source",
+            "taken_at"
+          ],
           "description": "A copy of the project's files, laid out at the same folder inside the box. File reads and writes the session never made run for real on this copy.",
           "properties": {
             "tar": {
@@ -425,7 +413,11 @@
               "description": "The project's folder on the machine where the session ran. The copy sits at this path inside the box."
             },
             "source": {
-              "enum": ["git", "today", "mark"],
+              "enum": [
+                "git",
+                "today",
+                "mark"
+              ],
               "description": "git: the folder's files as committed at the moment's time. today: the folder's files as they were when the moment was made. mark: the folder's files as saved at the mark."
             },
             "commit": {
@@ -439,12 +431,16 @@
             },
             "more": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Bundle paths of more tar files, when the copy is too big for one. Unpack them after tar, into the same folder."
             },
             "left_out": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Files left out of the copy: files Phoenix could not read, and, in a folder outside git, dot-files, dot-folders such as .ssh, and node_modules. They are missing inside the box."
             },
             "bytes": {
@@ -481,7 +477,10 @@
         },
         "marked": {
           "type": "object",
-          "required": ["at", "world"],
+          "required": [
+            "at",
+            "world"
+          ],
           "description": "Set when the moment came from phoenix mark.",
           "properties": {
             "at": {
@@ -494,11 +493,17 @@
             },
             "world": {
               "type": "object",
-              "required": ["files", "services"],
+              "required": [
+                "files",
+                "services"
+              ],
               "description": "What the mark saved of the world at that time.",
               "properties": {
                 "files": {
-                  "enum": ["saved", "not saved"],
+                  "enum": [
+                    "saved",
+                    "not saved"
+                  ],
                   "description": "saved: a copy of the project's files as they were at the mark."
                 },
                 "services": {
@@ -511,10 +516,6 @@
               }
             }
           }
-          },
-        "files": {
-          "type": "string",
-          "description": "Bundle folder holding the copied files beside the session that the cut needs."
         }
       }
     }

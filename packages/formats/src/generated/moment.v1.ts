@@ -24,14 +24,7 @@ export type MomentManifest = {
   /**
    * Default start point.
    */
-  start?:
-    | ("beginning" | "mark")
-    | {
-        /**
-         * An event id within a capture.
-         */
-        at: string;
-      };
+  start?: "beginning" | "mark";
   clock?: {
     time: string;
     timezone: string;

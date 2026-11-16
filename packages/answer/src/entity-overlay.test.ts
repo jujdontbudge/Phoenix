@@ -28,7 +28,7 @@ test("S2: a write without an argument id must not invent missing entities", asyn
         kind: part === 0 ? "call" : "result", connector: "calendar", surface: "mcp", body: { inline: JSON.stringify(message) + "\n" } });
     }
   }
-  const index = await buildIndex(events, { start: "beginning", policy, body: async event => {
+  const index = await buildIndex(events, { policy, body: async event => {
     assert.ok(event.body && "inline" in event.body);
     return Buffer.from(event.body.inline);
   } });
@@ -56,7 +56,7 @@ test("S3: complete lists support declared nested JSON Pointer filters", async ()
   const events: TraceEvent[] = messages.map((body, seq) => ({ v: 1, capture: "overlay-proof", stream: "calendar", seq,
     ts: { wall: "2026-11-15T12:00:00.000Z", mono: String(seq + 1) },
     kind: seq === 0 ? "call" : "result", connector: "calendar", surface: "mcp", body: { inline: body } }));
-  const index = await buildIndex(events, { start: "beginning", policy, body: async event => {
+  const index = await buildIndex(events, { policy, body: async event => {
     assert.ok(event.body && "inline" in event.body);
     return Buffer.from(event.body.inline);
   } });

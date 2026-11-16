@@ -20,7 +20,7 @@ test('S10: repeating an observation must not repeat its subsequent change notifi
   }));
   const engine = await startEngine({
     evidence: { events, body: async event => Buffer.from(event.body.inline) },
-    start: 'beginning', routes: {}, hmacKey: Buffer.alloc(32, 1),
+    routes: {}, hmacKey: Buffer.alloc(32, 1),
     sample: { root: join(root, 'sample'), metadata: { capture: 'sample',
       harness: { name: 'review', tree: 'none' }, recipe: { name: 'review', version: '1' },
       routes: ['replay'], started_at: '2026-11-15T00:00:00Z', boot_id: 'review' } },

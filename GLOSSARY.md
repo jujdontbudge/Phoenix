@@ -1,23 +1,39 @@
 # Phoenix
 
-Phoenix records everything a harness does while it runs, so that a moment where it made a mistake can later be rebuilt in a sandbox and the harness edited and replayed until it does the right thing.
+Phoenix takes a harness back to a moment of a run it already made, using the harness's own saved session, so the harness can be edited and replayed there until it does the right thing.
 
 ## Language
 
 **Run**:
 One execution of a harness on a task, either live against real systems or synthetic against a made-up world.
-_Avoid_: Session, trajectory, episode
+_Avoid_: Trajectory, episode
+
+**Session file**:
+The file a harness saves for a run on its own, with every message, tool call and tool result. It is the record a replay is built from; Phoenix only reads a copy of it.
+_Avoid_: Recording, trace, transcript (when this file is meant)
+
+**Record**:
+To save what happened in a run so a moment of it can be replayed later. A harness records by saving its own session file; Phoenix adds nothing live to make that happen.
+_Avoid_: Capture (when the session file is meant)
+
+**LLM**:
+The language model a harness talks to while it runs. Phoenix never sits between a harness and its LLM.
+_Avoid_: Model
 
 **Moment**:
-A marked point in a run, flagged by the agent itself during the run or picked afterward from the recording, that a replay is built around.
+A point in a run that a replay is built around, picked from the session file or saved with a mark. Under `phoenix capture` the agent can also flag one, which replays from the beginning only.
 _Avoid_: Snapshot, checkpoint, case
 
+**Mark**:
+A saved world at a moment, taken while the harness runs or afterward: the session file and its line, a copy of the project's files, and, when the mark is given the services' MCP config and plugins, what each service's read-only tools answered right then.
+_Avoid_: Checkpoint, bookmark
+
 **Replay**:
-A re-run of a moment in the sandbox, starting either from the beginning of the run or from the moment's mark.
+A re-run of a moment in the sandbox: the harness resumes its own session from the moment's cut, or starts from the beginning of the run with the original prompt.
 _Avoid_: Rerun, simulation
 
 **Harness**:
-Anything that runs an agent on a task and reads its tools and model endpoints from config, official or self-made.
+Anything that runs an agent on a task and reads its tools and LLM from config, official or self-made.
 _Avoid_: Agent, framework, app
 
 **Tool**:
@@ -25,12 +41,24 @@ Anything an agent can act through: an MCP server, a CLI command, or a direct API
 _Avoid_: Connector (when the transport is meant), integration
 
 **Capture**:
-Recording, on our side of the boundary, everything that passes through one tool surface during a run.
+Recording, on our side of the boundary, the tool traffic that passes through Phoenix's MCP or CLI proxy during a run. It is optional, and it never includes the harness's LLM traffic.
 _Avoid_: Snapshot, export, dump
 
 **Capture recipe**:
-A ready-made, installable way to capture a particular agent or tool surface, run alongside the agent so that setting up replay is easy.
+A ready-made, installable way to read a particular harness's session file, resume it in a replay, and optionally capture its tools.
 _Avoid_: Plugin (when only capture is meant), integration
+
+**Working copy**:
+A stand-in for one real service that answers a replay's calls the way the real service would and takes its writes, so the real service is never touched.
+_Avoid_: Mock, fake
+
+**Files copy**:
+A copy of the project's files at the moment, in which a replay's new file reads and writes run for real.
+_Avoid_: Workspace, checkout
+
+**Made-up answer**:
+A tool answer the simulator LLM writes for a call nothing else can answer, labeled as made up in the result.
+_Avoid_: Fake answer, guess
 
 **Improver**:
 Whoever edits the harness and replays the moment until it passes: usually an outside agent the person connects, or the person themselves by hand.
@@ -41,7 +69,7 @@ The written definition of the right thing at a moment, fixed before the loop sta
 _Avoid_: Rubric, eval, test, expected output
 
 **Snapshot**:
-The captured real state behind a moment from a live run.
+The real state behind a moment from a live run.
 _Avoid_: Export, dump, backup
 
 **Scenario**:
@@ -49,12 +77,8 @@ A staged or seeded world for a situation that never happened live, which yields 
 _Avoid_: Fixture, mock world, test environment
 
 **Workbench**:
-Phoenix's internal sandbox that the Improver drives to read a moment, edit the harness, replay, and check.
+The workspace and tools the Improver uses to read a moment, edit the harness, replay, and check.
 _Avoid_: Sandbox app, studio
-
-**Login context**:
-Text a harness adds to the model-request history depending on how it is signed in, such as the account's email, which a capture recipe declares so that a replay without that login can still match the frozen prefix.
-_Avoid_: Account state, credentials
 
 **Correction**:
 A person's fix or rejection of what the agent did at a moment, which is the default starting point for its success check.

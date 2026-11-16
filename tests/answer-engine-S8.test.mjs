@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { startEngine } from '../packages/engine/src/index.ts';
 import { frame } from '../packages/taps/src/index.ts';
 
-test('S8: echo accepts two writes that were already concurrent in the recording', async t => {
+test('S8: replay accepts two writes that were already concurrent in the recording', async t => {
   const root = await mkdtemp(join(import.meta.dirname, 'concurrent-'));
   const messages = [
     ['call', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'write_file', arguments: { path: 'a.txt', content: 'a' } } }],
@@ -20,7 +20,7 @@ test('S8: echo accepts two writes that were already concurrent in the recording'
   }));
   const engine = await startEngine({
     evidence: { events, body: async event => Buffer.from(event.body.inline) },
-    start: 'echo', routes: {}, hmacKey: Buffer.alloc(32, 1),
+    routes: {}, hmacKey: Buffer.alloc(32, 1),
     sample: { root: join(root, 'sample'), metadata: { capture: 'sample',
       harness: { name: 'review', tree: 'none' }, recipe: { name: 'review', version: '1' },
       routes: ['replay'], started_at: '2026-11-15T00:00:00Z', boot_id: 'review' } },

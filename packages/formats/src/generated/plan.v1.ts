@@ -44,14 +44,7 @@ export interface ReplayPlan {
       [k: string]: unknown;
     };
   };
-  start:
-    | ("beginning" | "mark" | "echo")
-    | {
-        /**
-         * An event id within a capture.
-         */
-        at: string;
-      };
+  start: "beginning" | "mark";
   samples: {
     base: number;
     tiebreak: number;
@@ -90,13 +83,6 @@ export interface ReplayPlan {
    * @minItems 1
    */
   clock_probe: string[];
-  /**
-   * The recipe's declared login context, copied from recipe.yaml model.login_context.
-   */
-  login_context?: {
-    name: string;
-    pattern: string;
-  }[];
   /**
    * Version of the engine's matching rules.
    */

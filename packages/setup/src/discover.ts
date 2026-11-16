@@ -15,19 +15,9 @@ export function recognizes(descriptor: PluginDescriptor, name: string, surface: 
   return hosts.some(host => r.hosts?.includes(host));
 }
 
-export function harnessMcpServers(files: ReadonlyMap<string, string>): string[] {
-  const contract = files.get("phoenix.harness.yaml");
-  if (!contract) return [];
-  const mcp = object(object(object(parse(contract)).endpoints).mcp);
-  if (mcp.format !== "mcpServers" || typeof mcp.file !== "string" || !files.has(mcp.file)) return [];
-  return Object.keys(object(object(JSON.parse(files.get(mcp.file)!)).mcpServers));
-}
-
-export function discoverConnectors(evidence: RunEvidence, harnessServers: readonly string[]): Record<string, Connector> {
-  const models = new Set(evidence.models.map(m => m.connector));
+export function discoverConnectors(evidence: RunEvidence): Record<string, Connector> {
   const connectors: Record<string, Connector> = {};
   for (const [name, { surface, routes }] of evidence.surfaces) {
-    if (models.has(name) && !evidence.http.some(h => h.connector === name)) continue;
     const initialize = evidence.initialize.get(name);
     const info = initialize ? mcpInfo(initialize) : {};
     const tools = evidence.toolLists.get(name);
@@ -38,20 +28,7 @@ export function discoverConnectors(evidence: RunEvidence, harnessServers: readon
       data: [{ path: "data/run.jsonl", kind: "run-evidence" }],
     };
   }
-  for (const name of harnessServers) {
-    if (connectors[name]) continue;
-    connectors[name] = { surface: "mcp", routes: [], tier: "recorded", origin: "captured", read_only: [], coverage: { recorded: false, witness: "model-api" }, data: [{ path: "data/run.jsonl", kind: "run-evidence" }] };
-  }
   return connectors;
-}
-
-export function modelIdentifier(evidence: RunEvidence): MomentManifest["model"] {
-  for (const exchange of evidence.models) {
-    const reported = exchange.response?.values.map(v => object(v).model ?? object(object(v).response).model).find(m => typeof m === "string");
-    if (typeof reported === "string") return { id: reported };
-    if (typeof exchange.request.value.model === "string") return { id: exchange.request.value.model };
-  }
-  return undefined;
 }
 
 const SAFE = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);

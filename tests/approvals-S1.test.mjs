@@ -22,7 +22,7 @@ test('S1: pass acceptance cannot bypass showing the synthesized answers', async 
     const resultPath = join(root, 'result.json');
     await writeFile(resultPath, JSON.stringify({
       phoenix_result: 1, plan: digest('plan'), check: bundle.lock.check, ledger_entry: entry,
-      start: 'beginning', prefix_edits: [], tiebreak_ran: false,
+      start: 'beginning', tiebreak_ran: false,
       samples: [{ sample: 0, tiebreak: false, status: 'pass', discounted: true,
         attempts: [{ attempt: 0, status: 'finished' }],
         expectations: [{ expectation: 0, outcome: 'pass', tainted: true }] }],

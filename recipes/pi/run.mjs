@@ -4,8 +4,8 @@ import { homedir, tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
-const gateways = [];
-const stopGateways = () => { for (const child of gateways) child.kill("SIGTERM"); };
+const proxies = [];
+const stopProxies = () => { for (const child of proxies) child.kill("SIGTERM"); };
 const option = name => {
   const i = args.indexOf(name);
   return i < 0 ? undefined : args[i + 1];
@@ -19,7 +19,7 @@ try {
   const capture = process.env.PHOENIX_CAPTURE;
   if (!capture) throw new Error("Run inside phoenix capture; after-the-fact capture needs only Pi and import");
   const { routes } = await json(join(capture, "capture.json"));
-  const gateway = routes.includes("gateway"), mcp = routes.includes("mcp-proxy");
+  const mcp = routes.includes("mcp-proxy");
   const source = resolve(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi/agent"));
   const runtime = await mkdtemp(join(tmpdir(), "phoenix-pi-"));
   const agent = join(runtime, "agent");
@@ -27,22 +27,7 @@ try {
   for (const name of await readdir(source)) {
     if (!["models.json", "settings.json", "mcp.json"].includes(name)) await symlink(join(source, name), join(agent, name));
   }
-  const models = await json(join(source, "models.json"));
-  const settings = await json(join(source, "settings.json"));
-  if (gateway) {
-    const provider = option("--provider"), model = option("--model");
-    if (!provider || !model || model.includes("*")) throw new Error("Gateway needs explicit --provider and exact --model, without thinking suffix");
-    if (["github-copilot", "radius", "amazon-bedrock", "google-vertex"].includes(provider)) throw new Error("This provider needs transcript-only model capture");
-    const baseUrl = process.env.PHOENIX_MODEL_BASE_URL;
-    if (!baseUrl || !/^http:\/\/127\.0\.0\.1:\d+$/.test(baseUrl)) throw new Error("Missing launcher gateway URL");
-    models.providers ??= {};
-    const config = models.providers[provider] ??= {};
-    config.baseUrl = baseUrl;
-    for (const item of config.models ?? []) item.baseUrl = baseUrl;
-    settings.transport = "sse";
-  }
-  await writeFile(join(agent, "models.json"), JSON.stringify(models), { mode: 0o600 });
-  await writeFile(join(agent, "settings.json"), JSON.stringify(settings), { mode: 0o600 });
+  for (const name of ["models.json", "settings.json"]) await writeFile(join(agent, name), JSON.stringify(await json(join(source, name))), { mode: 0o600 });
   const misses = [];
   const reverse = new Set((process.env.PHOENIX_PI_MCP_REVERSE ?? "").split(",").filter(Boolean));
   const phoenix = join(process.env.PATH.split(delimiter)[0], "phoenix");
@@ -58,13 +43,13 @@ try {
         }
         const upstream = new URL(server.url);
         if (!["http:", "https:"].includes(upstream.protocol) || upstream.username || upstream.password || upstream.hash) throw new Error("Unsupported MCP URL");
-        const child = spawn(phoenix, ["gateway", "0"], { env: { ...process.env, PHOENIX_UPSTREAM: upstream.origin, PHOENIX_GATEWAY_SURFACE: "mcp", PHOENIX_GATEWAY_CONNECTOR: name }, stdio: ["ignore", "ignore", "ignore", "ipc"] });
-        gateways.push(child);
+        const child = spawn(phoenix, ["mcp-http-proxy", name, upstream.href], { stdio: ["ignore", "ignore", "ignore", "ipc"] });
+        proxies.push(child);
         const port = await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error("MCP gateway did not start")), 10_000);
+          const timer = setTimeout(() => reject(new Error("MCP HTTP proxy did not start")), 10_000);
           child.once("message", message => { clearTimeout(timer); resolve(message.port); });
           child.once("error", error => { clearTimeout(timer); reject(error); });
-          child.once("exit", () => { clearTimeout(timer); reject(new Error("MCP gateway stopped")); });
+          child.once("exit", () => { clearTimeout(timer); reject(new Error("MCP HTTP proxy stopped")); });
         });
         server.url = `http://127.0.0.1:${port}${upstream.pathname}${upstream.search}`;
       }
@@ -94,21 +79,21 @@ try {
       cwd = mirror;
     }
   }
-  await appendFile(join(capture, "coverage.jsonl"), JSON.stringify({ recipe: "pi", routes, model: gateway ? "models.json baseUrl; SSE" : "transcript", mcp: mcp ? "configured stdio and explicitly authorized HTTP servers" : "transcript", limitations: misses, retained_overlay: runtime, cwd_overlay: cwd !== process.cwd() }) + "\n", { mode: 0o600 });
+  await appendFile(join(capture, "coverage.jsonl"), JSON.stringify({ recipe: "pi", routes, model: "transcript", mcp: mcp ? "configured stdio and explicitly authorized HTTP servers" : "transcript", limitations: misses, retained_overlay: runtime, cwd_overlay: cwd !== process.cwd() }) + "\n", { mode: 0o600 });
   process.stderr.write(`Pi private config overlay: ${runtime}\n`);
   const sessionCwd = resolve(process.env.PHOENIX_CWD ?? process.cwd());
   const sessionDir = join(source, "sessions", `--${sessionCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`);
   const child = spawn("pi", args, { cwd, env: { ...process.env, PI_CODING_AGENT_DIR: agent, PI_CODING_AGENT_SESSION_DIR: process.env.PI_CODING_AGENT_SESSION_DIR ?? sessionDir }, stdio: "inherit" });
   const signals = new Map(["SIGINT", "SIGTERM", "SIGHUP"].map(signal => [signal, () => child.kill(signal)]));
   for (const [signal, forward] of signals) process.on(signal, forward);
-  child.on("error", () => { stopGateways(); process.stderr.write("Pi could not start\n"); process.exitCode = 127; });
+  child.on("error", () => { stopProxies(); process.stderr.write("Pi could not start\n"); process.exitCode = 127; });
   child.on("exit", (code, signal) => {
-    stopGateways();
+    stopProxies();
     for (const [name, forward] of signals) process.off(name, forward);
     if (signal) process.kill(process.pid, signal); else process.exitCode = code ?? 1;
   });
 } catch {
-  stopGateways();
-  process.stderr.write("Pi recipe configuration failed; check explicit provider/model, config paths and supported routes\n");
+  stopProxies();
+  process.stderr.write("Pi recipe configuration failed; check config paths and supported routes\n");
   process.exitCode = 1;
 }

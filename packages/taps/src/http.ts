@@ -5,14 +5,14 @@ import { HTTP_STREAM, decodeHttpHead, encodeJson, decodeJson, type HttpRequest }
 import { frame, writeBytes, type Backend } from "./ports.ts";
 
 export interface HttpRoute { surface: "mcp" | "http"; connector: string; meta?: unknown }
-export interface GatewayOptions {
+export interface HttpTapOptions {
   backend: Backend;
   route(request: HttpRequest, mode: "reverse" | "forward" | "transparent"): HttpRoute;
   mode?: "reverse" | "forward" | "transparent";
   tls?: TlsOptions;
 }
 
-export function httpHandler(options: GatewayOptions, authority?: string): (request: IncomingMessage, response: ServerResponse) => void {
+export function httpHandler(options: HttpTapOptions, authority?: string): (request: IncomingMessage, response: ServerResponse) => void {
   return (request, response) => {
     void (async () => {
       const socket = request.socket as TLSSocket;
@@ -63,7 +63,7 @@ export function httpHandler(options: GatewayOptions, authority?: string): (reque
   };
 }
 
-export function httpGatewayTap(options: GatewayOptions): Server {
+export function httpTap(options: HttpTapOptions): Server {
   const handler = httpHandler(options);
   const server = options.tls && options.mode !== "forward" ? createSecureServer(options.tls, handler) : createServer(handler);
   server.on("checkContinue", handler);
@@ -86,5 +86,5 @@ export function httpGatewayTap(options: GatewayOptions): Server {
 }
 
 export function mcpHttpTap(options: { backend: Backend; connector: string }): Server {
-  return httpGatewayTap({ backend: options.backend, route: () => ({ surface: "mcp", connector: options.connector }) });
+  return httpTap({ backend: options.backend, route: () => ({ surface: "mcp", connector: options.connector }) });
 }

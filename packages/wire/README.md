@@ -11,18 +11,6 @@ failure with the original bytes; a relay must never depend on successful decodin
   metadata, output channels, and code or signal. HTTP types retain raw header
   pairs and bodies; `decodeHttpBody` is an explicit read-time view, including
   gzip, deflate, br, and zstd. It never changes the stored exchange.
-- `modelDialects` uses API shapes (`messages`, `chat-completions`, `responses`,
-  `generate-content`), not provider identities. Each entry lists method/path
-  inference operations, splits history from configuration (system-role turns and messages-dialect `cache_control` go to configuration), extracts tool-use IDs
-  and streamed arguments, and identifies provider state or external access for
-  the engine's safety policy. `decodeModelBody` reads JSON or assembled SSE while
-  leaving every provider's format intact. Recipes choose the API shape.
-  `completeModelStream` recognizes dispatched terminal SSE events for messages,
-  chat-completions and responses. Generate-content has no stream-wide terminal
-  marker, so it still needs transport EOF. It returns the decoded stream so a
-  cancelled compressed response can be re-encoded with a complete footer during
-  replay. A terminal never repairs lost frames; HTTP decoding stays strict by
-  default and permits unfinished encoding only for this terminal check.
 - `canonicalJson` rejects non-JSON and invalid Unicode values and implements
   RFC 8785. `callKey` hashes exactly `{surface, connector, op, args}` with SHA-256;
   it never removes argument paths or changes array order or null/absent values.
@@ -35,14 +23,8 @@ failure with the original bytes; a relay must never depend on successful decodin
 
 `deriveMcpResult(text, location, isError?)` wraps verbatim result text in an MCP
 CallToolResult. It does not invent a JSON-RPC id or claim side effects.
-`deriveToolList(request, dialect, location)` maps recorded function definitions
-to an MCP tools/list result. Recipes/setup must select only the definitions for
-the connector named in `location`; this rule never infers connector ownership.
-It accepts messages input_schema, function parameters in chat-completions and
-responses, and generate-content parametersJsonSchema. Unsupported built-in tools,
-missing schemas and duplicate names are reasoned misses, not invented schemas.
-Both functions return `{ok: true, fill}` or `{ok: false, why}` and validate the
+`deriveSerializedMcpResult(text, location)` accepts text that is already a serialized MCP result. Both functions return `{ok: true, fill}` or `{ok: false, why}` and validate the
 versioned Fill. Mechanical fills are always `derived`, cite the evidence
 location and rule, and name `wire:<rule>` as producer. Text stays text, even if
-it looks like JSON. No rule reconstructs an absent protocol version or a model
+it looks like JSON. No rule reconstructs an absent protocol version or an LLM
 response. Setup owns synthesized fills and the verbatim check on agent fills.

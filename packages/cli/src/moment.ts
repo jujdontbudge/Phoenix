@@ -8,7 +8,7 @@ import { runMomentPackCommand } from "./moment-pack.ts";
 import { runMomentSessionCommand } from "./moment-session.ts";
 
 const USAGE = [
-  "Usage: phoenix moment create --capture <dir> [--task <key>] --mark <event> [--start beginning|mark|<event>] --id <id>",
+  "Usage: phoenix moment create --capture <dir> [--task <key>] --mark <event> [--start beginning] --id <id>",
   "         [--connector <name>:<mcp|cli|http> ...] [--check <file> | --correction <event>]",
   "         [--workdir <snapshot> | --no-workdir] [--include-ignored | --no-include-ignored] [--prompt <text>] [--timezone <tz>] <out-dir>",
   "       phoenix moment create --scenario <dir> [--home <dir>] [--who <name>] <out-dir>",
@@ -56,7 +56,8 @@ export async function runMomentCommand(args: string[]): Promise<number> {
     if (!name || !SURFACES.includes(surface as never)) throw new Error(`Connector must be <name>:<mcp|cli|http>: ${spec}`);
     return { name, surface: surface as (typeof SURFACES)[number] };
   });
-  const start = v.start === undefined || v.start === "beginning" || v.start === "mark" ? v.start : { at: v.start };
+  if (v.start !== undefined && v.start !== "beginning") throw new Error("A moment made from a capture replays from the beginning only: Phoenix does not replay recorded LLM traffic to reach a later point");
+  const start = "beginning" as const;
   const manifest = await createSnapshotMoment({
     capture: v.capture, task: v.task, mark: v.mark, start, id: v.id, out: root, connectors, check: v.check, correction: v.correction,
     workdir: v["no-workdir"] ? false : v.workdir,

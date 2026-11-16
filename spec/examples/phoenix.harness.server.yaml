@@ -4,5 +4,5 @@ run:    { serve: [node, dist/server.js], ready: { http: "GET /health" },
           submit: { http: { method: POST, path: /tasks, body: "{task_json}" } },
           build: [npm, run, build], image: { dockerfile: Dockerfile } }
 endpoints:
-  model:  { env: OPENAI_BASE_URL, dialect: openai-responses }
+  model:  { env: OPENAI_BASE_URL }
 editable: ["prompts/**"]

@@ -66,8 +66,10 @@ export interface HarnessContract {
       };
   endpoints?: {
     model: {
+      /**
+       * The environment variable the harness reads its LLM's base URL from. A replay sets it to the URL in the replay settings and lets the box reach that host directly.
+       */
       env: string;
-      dialect: string;
     };
     mcp?: {
       file: string;

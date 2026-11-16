@@ -27,27 +27,6 @@ export interface RecipeDescriptor {
       [k: string]: string[];
     };
   }[];
-  model?: {
-    /**
-     * The model base-URL setting.
-     */
-    setting: string;
-    dialect: string;
-    /**
-     * Context the harness injects into model-request history depending on how it is signed in. The frozen-prefix comparison leaves out history text blocks whose whole text matches a pattern and reports every difference in them.
-     */
-    login_context?: {
-      name: string;
-      /**
-       * A JavaScript regular expression that must match a history text block's whole text.
-       */
-      pattern: string;
-      /**
-       * Why the harness injects this context and why it depends on the login.
-       */
-      reason: string;
-    }[];
-  };
   mcp?: {
     file: string;
     format: string;

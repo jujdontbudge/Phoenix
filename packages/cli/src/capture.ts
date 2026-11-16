@@ -12,7 +12,7 @@ export async function main(args: string[]) {
   if (command === "flag-server") return flagServer();
   if (command !== "capture") {
     if (command && await captureRuntime(command, rest)) return;
-    throw new Error("Usage: phoenix capture --recipe recipe.yaml [--routes mcp-proxy,cli-proxy,gateway] -- command ...");
+    throw new Error("Usage: phoenix capture --recipe recipe.yaml [--routes mcp-proxy,cli-proxy] -- command ...");
   }
   const split = rest.indexOf("--");
   if (split < 0 || !rest[split + 1]) throw new Error("Name a harness command after --");

@@ -32,10 +32,6 @@ async function wrapped(plan: Config) {
   const overrides: string[] = [], proxies: ReturnType<typeof fork>[] = [];
   const set = (key: string, value: any) => overrides.push("-c", `${key}=${toml(value)}`);
   try {
-    if (plan.routes.includes("gateway")) {
-      set(`model_providers.${plan.provider}.base_url`, process.env.PHOENIX_CODEX_MODEL_URL);
-      set(`model_providers.${plan.provider}.supports_websockets`, false);
-    }
     if (plan.routes.includes("mcp-proxy")) for (const [name, server] of Object.entries(plan.servers) as [string, Config][]) {
       if (server.enabled === false) continue;
       const prefix = `mcp_servers.${name}`;
@@ -77,8 +73,8 @@ async function main() {
   if (config.profile) throw new Error("Capture needs an unprofiled config so endpoint coverage is explicit");
   const provider = config.model_provider ?? "openai", servers = config.mcp_servers ?? {};
   const routes = (values.routes ?? "mcp-proxy,cli-proxy,transcript").split(",");
-  if (routes.some(r => !["gateway", "mcp-proxy", "cli-proxy", "transcript"].includes(r))) throw new Error("Unknown capture route");
-  if ((routes.includes("gateway") || routes.includes("mcp-proxy")) && ![provider, ...Object.keys(servers)].every(name => /^[a-zA-Z0-9_-]+$/.test(name))) throw new Error("Dotted/quoted provider or MCP identifiers require transcript capture via explicit import");
+  if (routes.some(r => !["mcp-proxy", "cli-proxy", "transcript"].includes(r))) throw new Error("Unknown capture route");
+  if (routes.includes("mcp-proxy") && !Object.keys(servers).every(name => /^[a-zA-Z0-9_-]+$/.test(name))) throw new Error("Dotted/quoted MCP identifiers require transcript capture via explicit import");
   const cwd = await realpath(values.cwd ?? process.cwd());
   let projectRoot = cwd;
   try { projectRoot = await realpath(execFileSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); } catch {}
@@ -88,11 +84,7 @@ async function main() {
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     if (dir === projectRoot || dirname(dir) === dir) break;
   }
-  if (projectConfig && (routes.includes("gateway") || routes.includes("mcp-proxy"))) throw new Error("Project-local config can override routing; use transcript capture or explicit import");
-  if (routes.includes("gateway") && (provider === "openai" || ["api-key", "chatgpt"].includes(values["login-mode"]))) throw new Error("Built-in OpenAI WebSockets cannot use this HTTP gateway; use transcript capture without changing providers");
-  if (routes.includes("gateway") && (["bedrock", "vertex"].includes(values["login-mode"]) || ["amazon-bedrock", "amazon-bedrock-runtime", "gcp"].includes(provider))) throw new Error("Native cloud authentication needs transcript capture; no gateway substitution is made");
-  const upstream = config.model_providers?.[provider]?.base_url;
-  if (routes.includes("gateway") && !upstream) throw new Error("The selected provider has no explicit base URL; use transcript capture");
+  if (projectConfig && routes.includes("mcp-proxy")) throw new Error("Project-local config can override routing; use transcript capture or explicit import");
   const reverse = (values["reverse-mcp"] ?? "").split(",").filter(Boolean);
   for (const name of reverse) if (!servers[name]?.url || servers[name].auth === "chatgpt") throw new Error("Reverse MCP requires a configured HTTP server without ChatGPT-bound authentication");
   const before = new Set(await sessions(codexHome));
@@ -107,17 +99,17 @@ async function main() {
     const descriptor = parse(await readFile(join(recipe, "recipe.yaml"), "utf8")) as Config;
     delete descriptor.mcp;
     delete descriptor.transcript_reader;
-    const contract = { phoenix_harness: 1, name: "codex", run: { command: ["codex", ...args], output: "stdout" }, endpoints: { model: { env: "PHOENIX_CODEX_MODEL_URL", dialect: "openai-responses" } }, editable: ["AGENTS.md"] };
+    const contract = { phoenix_harness: 1, name: "codex", run: { command: ["codex", ...args], output: "stdout" }, endpoints: { model: { env: "OPENAI_BASE_URL" } }, editable: ["AGENTS.md"] };
     const routedServers = Object.fromEntries(Object.entries(servers).map(([name, server]) => {
       const value = server as Config;
       return [name, { ...Object.fromEntries(["enabled", "command", "args", "url"].filter(key => value[key] !== undefined).map(key => [key, value[key]])), ...(typeof value.env?.PATH === "string" ? { path: value.env.PATH } : {}) }];
     }));
-    for (const [name, data] of Object.entries({ "recipe.json": descriptor, "contract.json": contract, "plan.json": { provider, servers: routedServers, routes, reverse, args } })) await writeFile(join(temp, name), JSON.stringify(data), { mode: 0o600 });
-    const code = await run([process.execPath, entry, "capture", "--recipe", join(temp, "recipe.json"), "--contract", join(temp, "contract.json"), "--cwd", cwd, "--output", root, "--routes", routes.join(","), "--", process.execPath, import.meta.filename, "_run", join(temp, "plan.json")], { ...process.env, PHOENIX_HOME: home, ...(upstream ? { PHOENIX_CODEX_MODEL_URL: upstream } : {}) });
+    for (const [name, data] of Object.entries({ "recipe.json": descriptor, "contract.json": contract, "plan.json": { servers: routedServers, routes, reverse, args } })) await writeFile(join(temp, name), JSON.stringify(data), { mode: 0o600 });
+    const code = await run([process.execPath, entry, "capture", "--recipe", join(temp, "recipe.json"), "--contract", join(temp, "contract.json"), "--cwd", cwd, "--output", root, "--routes", routes.join(","), "--", process.execPath, import.meta.filename, "_run", join(temp, "plan.json")], { ...process.env, PHOENIX_HOME: home });
     const captureId = JSON.parse(await readFile(join(root, "capture.json"), "utf8")).capture as string;
     const canonicalRoot = join(home, "captures", captureId);
     if (canonicalRoot !== root) { await rename(root, canonicalRoot); root = canonicalRoot; }
-    await appendFile(join(root, "coverage.jsonl"), JSON.stringify({ recipe: "codex", version, login_mode: values["login-mode"], provider: projectConfig ? "project-config-not-resolved" : provider, routes, remote_mcp_fallback: Object.keys(servers).filter(n => servers[n].enabled !== false && servers[n].url && !reverse.includes(n)), limitations: ["Only PATH-resolved ls is shimmed; absolute paths, builtins and reset PATH bypass it", "Transcript items are not wire exchanges; no HTTP model bodies or MCP/CLI envelopes are invented", "Direct HTTP and plugin/dynamic MCP servers are not intercepted", "Filesystem side effects are not captured by CLI shims", "Model responses ending before transport EOF remain partial, even when response.completed was seen"] }) + "\n");
+    await appendFile(join(root, "coverage.jsonl"), JSON.stringify({ recipe: "codex", version, login_mode: values["login-mode"], provider: projectConfig ? "project-config-not-resolved" : provider, routes, remote_mcp_fallback: Object.keys(servers).filter(n => servers[n].enabled !== false && servers[n].url && !reverse.includes(n)), limitations: ["Only PATH-resolved ls is shimmed; absolute paths, builtins and reset PATH bypass it", "Transcript items are not wire exchanges; no HTTP model bodies or MCP/CLI envelopes are invented", "Direct HTTP and plugin/dynamic MCP servers are not intercepted", "Filesystem side effects are not captured by CLI shims", "The harness's LLM traffic is not recorded", "A replay of a capture alone points Codex at its LLM through OPENAI_BASE_URL, which only the built-in OpenAI provider reads"] }) + "\n");
     let imported = false, incomplete = false;
     const importDescriptor = parse(await readFile(join(recipe, "recipe.yaml"), "utf8")) as Config;
     importDescriptor.transcript_reader.command = [process.execPath, join(recipe, "transcript-reader.ts"), "--single-run"];

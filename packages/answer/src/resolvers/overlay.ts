@@ -142,7 +142,6 @@ export const overlay: Resolver = {
     if (!maps || emulatorOwns(ctx, call.connector)) return;
     const state = stateFor(ctx, call.connector);
     if (!call.readOnly) state.writes.set(call.key, call);
-    if (answer.resolver === "frozen-prefix") return;
     const map = maps[call.op];
     if (map && (answer.provenance !== "synthesized" || !call.readOnly)) absorb(state, map, call, answer.provenance === "synthesized" ? { body: new Uint8Array() } : answer.raw);
     else if (!call.readOnly) for (const c of state.collections.values()) { c.entities.clear(); c.complete = false; c.uncertain = true; }

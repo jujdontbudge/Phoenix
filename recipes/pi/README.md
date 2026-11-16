@@ -7,7 +7,13 @@ change providers, or copy credentials into a recipe. Check `pi --version` and
 or not ready. Never use the `--credentials` or credential-printing commands in
 logs. Other Pi distributions and versions need their own verification.
 
-## Live routes
+## Capture with the tool proxies (optional)
+
+You don't need a capture to replay pi: a moment can be cut from pi's own
+session file (see the next section). A capture adds a record of pi's MCP and
+CLI tool traffic. It never touches pi's LLM: pi talks to its LLM exactly as it
+always does, and Phoenix records none of that traffic. pi's own session file is
+the record of what it said to its LLM.
 
 Use an absolute path to `run.mjs` as the command inside `phoenix capture`.
 The wrapper reads the launcher's selected routes from `capture.json`. The
@@ -18,42 +24,25 @@ capture-only harness contract, stored outside the working tree if desired, is:
 phoenix_harness: 1
 name: pi
 run: {command: [pi, --mode, rpc], output: stdout}
-endpoints:
-  model: {env: PHOENIX_MODEL_BASE_URL, dialect: openai-responses}
 editable: ["prompts/**"]
 ```
 
-Choose the dialect of the selected provider, not a universal Pi dialect:
-`anthropic-messages`, `openai-responses`, `openai-chat-completions`, or
-`generate-content`. Pi's `openai-codex-responses` uses `openai-responses` on the
-Phoenix side. MCP locations are in the descriptor's `configuration.mcp` rather
-than the generic launcher's single-file `mcp` field. Do not put `mcp` in this
+MCP locations are in the descriptor's `configuration.mcp` rather than the
+generic launcher's single-file `mcp` field. Do not put `mcp` in this
 capture contract: the wrapper applies Pi's multi-file MCP overlay itself, so
 the generic launcher must not wrap it a second time.
-For Replay, the contract instead names the materialized MCP config as usual.
-
-For an existing ChatGPT subscription, keeping the same upstream and model:
 
 ```sh
-export PHOENIX_MODEL_BASE_URL=https://chatgpt.com/backend-api
 phoenix capture --recipe /path/to/recipes/pi/recipe.yaml \
   --contract /private/path/pi.harness.yaml \
-  --routes gateway,mcp-proxy,cli-proxy -- \
-  node /path/to/recipes/pi/run.mjs --mode rpc \
-    --provider openai-codex --model gpt-6.1-sol
+  --routes mcp-proxy,cli-proxy -- \
+  node /path/to/recipes/pi/run.mjs --mode rpc
 ```
 
-The wrapper creates a private, retained agent-directory overlay. It changes
-only the selected provider's `baseUrl` (including its model-level overrides),
-and selects Pi's supported SSE transport. API names, model IDs, auth lookup,
-provider headers and billing remain Pi's. An exact `--provider` and `--model`
-are required for gateway capture. The original upstream must already have been
-chosen by the person; the wrapper cannot infer it from a token. It does not
-redirect auxiliary models, provider catalog/auth requests, or extension traffic.
-Don't change models during such a capture without a matching route.
-
-Pi reads the generated models through `PI_CODING_AGENT_DIR`. Existing files are
-linked except copied `models.json`, `settings.json` and `mcp.json`; refreshed
+The wrapper creates a private, retained agent-directory overlay. Pi reads it
+through `PI_CODING_AGENT_DIR`. Existing files are linked except copied
+`models.json`, `settings.json` and `mcp.json`. Only MCP entries change; the
+LLM settings, provider, login and billing stay exactly as they are. Refreshed
 credentials still go to Pi's original auth store through its link. Sessions stay
 in the original cwd-encoded session directory (including `--continue` lookup), unless `--session-dir` or
 `PI_CODING_AGENT_SESSION_DIR` specifies another directory. Original model,
@@ -92,9 +81,8 @@ Remote MCP URLs stay untouched by default, with a coverage limitation per
 entry. For a specific anonymous or fixed-header Streamable HTTP server whose
 resource URL you have authorized changing, set
 `PHOENIX_PI_MCP_REVERSE=server-name` (comma-separated for several). The wrapper
-starts a generic `phoenix gateway` per server using
-`PHOENIX_GATEWAY_SURFACE=mcp` and `PHOENIX_GATEWAY_CONNECTOR`, preserving its
-path, query, headers and bodies without discovery probes or added calls.
+starts `phoenix mcp-http-proxy <name> <url>` per server, preserving its path,
+query, headers and bodies without discovery probes or added calls.
 
 Do not authorize reverse routing for resource-bound OAuth. Entries with
 `oauth` or provider `auth`, SSE transport, or command/environment-expanded URLs
@@ -119,7 +107,7 @@ it did. CLI output does not recreate file writes.
 - The box's clock is the moment's time. `clock.mjs` moves only the clock pi's JavaScript sees. The TLS library keeps the real clock, so the LLM's certificate still checks out for an older moment.
 - The harness is `APPEND_SYSTEM.md` plus any pi extension in the harness's `extensions/` folder. Both load in the box.
 - pi reaches its LLM directly, with nothing from Phoenix in between. The box may reach only the addresses of the hosts in `resume.llm_hosts`, on port 443, looked up once before pi starts. DNS and every other address are shut.
-- Merged with a gap (JOH-55, JOH-61): made-up answers were last seen working on the code that became commit ba9d924f, not re-run on the final code. The simulator LLM they use, on OpenCode Go, was out of balance. No other LLM route on the Mac worked for it: DeepSeek was out of balance, the Zen and Kimi keys were expired or invalid, and ChatGPT's backend accepts only streamed replies, which the simulator doesn't send.
+- Made-up answers need an LLM for the simulator. The Captain saw one on main 14b44fbd (the Sentry untaken-write watch, simulator on OpenCode Go). When that account is out of balance, no made-up answer can be given and the replay stops at that call.
 - Known limit, by Johan's decision on 2026-11-16: another site that shares the LLM provider's addresses can be reached on port 443. Closing it would need a gate in the LLM's path, which Johan ruled out as too complicated. Don't add one.
 
 ## Mark, from the beginning, made up
@@ -134,8 +122,8 @@ Four more ways into a moment, besides `--at <line>`:
   --session <file> --at <line>` marks a past moment; then nothing is saved but
   the session. Make the moment with `phoenix moment create --mark <mark-dir>`.
   The answers saved at the mark win over the session's own for the same call.
-  Not yet: a replay does not serve the saved copy of the project's files. A
-  mark saves the copy, and T11 (JOH-55) makes the replay use it.
+  A replay serves the mark's copy of the project's files: three samples read a
+  file from the copy as it was at the mark (seen by the Captain on main 6b2f22a5).
 - **From the beginning.** `--from-beginning` starts at the session's first
   message, with its original prompt.
 - **A changed answer.** `--change-answer <line>=<file>` replaces the tool answer
@@ -145,23 +133,12 @@ Four more ways into a moment, besides `--at <line>`:
   prompt, and the world's answers) and `<folder>/check.yaml`. compose.mjs writes
   the pi session, and Phoenix answers the made-up tools from the world.
 
-## Login coverage
+## Logins
 
-| Pi credential source or login | Model route |
-| --- | --- |
-| API key in env, `auth.json`, secret-command lookup, or `models.json` | Gateway when that provider honors `baseUrl`; transcript otherwise. No key is resolved by the wrapper. |
-| Anthropic OAuth/bearer token, OpenAI Codex ChatGPT subscription | Same provider and token, gateway over the provider's HTTP/SSE API; transcript also available. Codex was proved on the existing login. |
-| Copilot OAuth | Transcript. Pi's OAuth model modifier sets the token-selected endpoint after config. |
-| Radius/custom Radius OAuth catalogs | Transcript. Gateway/catalog discovery and auth resource binding are not proved interchangeable. |
-| Other OAuth providers, including xAI | Transcript unless their endpoint behavior is verified; the recipe does not refresh or export their tokens to test them. |
-| Ambient Bedrock AWS credentials, Vertex ADC, Anthropic federation | Transcript. No claim that signed/cloud SDK transports accept this gateway or CA. |
-| Extension providers (for example a local subscription CLI), arbitrary custom auth | Transcript unless the extension explicitly supports the chosen model route. |
-| Unauthenticated local compatible endpoint | Gateway with that same endpoint and API; transcript available. |
-
-All rows can use the configured stdio MCP and PATH routes independently of model
-login. Remote MCP auth has the separate limitation above. An offered gateway
-route is conditional, not permission to bypass a pinned provider. Omit `gateway`
-when a row says transcript.
+Every pi login works the same way, because Phoenix never changes pi's LLM
+settings or login. Capture proxies only tool traffic. A replay copies the login
+the session used into the box for that run only, and deletes it when the run
+ends (`login.mjs`).
 
 ## RPC and after-the-fact capture
 
@@ -195,32 +172,10 @@ versions, records, roles, blocks and malformed rows produce `transcript.unread`
 and make the import incomplete while retaining its valid prefix.
 
 The transcript preserves all branches; it does not guess the active leaf or
-reconstruct a model request from compaction/context edits. It lacks raw model
+reconstruct an LLM request from compaction/context edits. It lacks raw LLM
 requests, wire tool lists/protocol versions, stream timing and unreported side
-effects. Those need setup fills marked derived/synthesized, so transcript-only
-evidence is not advertised as a byte-exact echo. Never commit a real session,
+effects. Those need setup fills marked derived/synthesized. Never commit a real session,
 prompt, capture, credential, or proof bundle.
-
-## Echo proof
-
-Use the live tap evidence to create/approve a moment with the setup commands,
-then run `phoenix replay echo --request /private/path/replay.json` (source:
-`node packages/cli/src/replay.ts echo --request ...`). The sandbox image must
-contain exactly the recorded Pi version and a small RPC driver which submits
-the task, waits for `agent_settled`, and prints the final assistant text. Its
-MCP config and model base URL must point to runner's shims, not real systems.
-Credentials stay outside the image; use placeholders inside. Preserve the
-original Pi config/system loadout, and report any prefix edits, missing fills,
-or transcript limitations from `fidelity.json`, not merely the check verdict.
-
-The observed Codex OAuth capture completed the task, but its three model
-responses were marked partial: Pi stops at `response.completed` and cancels
-the SSE reader before HTTP EOF. All three retained bodies contain that terminal
-event. Current Phoenix exchange reconstruction excludes those partial results,
-so runner echo blocks with `prefix-drift`: `model request POST /codex/responses
-where the recording has ls on ls`. This is not a successful echo; the native
-transcript import is complete, but it cannot supply the missing wire completion.
-Do not clear partial flags or copy real login state into the sandbox to hide it.
 
 References: the installed Pi docs `models-configuration.md`, `providers.md`,
 `mcp.md`, `rpc.md`, `session-format.md`, and `message-types.md`; upstream

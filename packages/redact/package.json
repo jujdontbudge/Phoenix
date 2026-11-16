@@ -10,6 +10,7 @@
     "@openredaction/core": "^1.1.5",
     "@phoenix/formats": "workspace:*",
     "@secretlint/core": "^13.1.0",
+    "@secretlint/profiler": "^13.1.0",
     "@secretlint/secretlint-rule-preset-recommend": "^13.1.0"
   }
 }

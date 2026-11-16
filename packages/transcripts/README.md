@@ -34,6 +34,8 @@ Re-importing identical bytes never replaces evidence, even if the original
 reader failed: the original partial segment and status remain authoritative.
 Fixing a reader requires a new reader identity (change its command/version).
 `importTranscript` includes the command and supported versions in that identity.
+One caller makes an exception: when `phoenix moment create` finds an earlier
+incomplete import of the same bytes, it deletes that segment and reads once more.
 
 This package never fills evidence, guesses missing values, reconciles duplicate
 wire evidence, or writes a fidelity report. Setup calls the pure wire derivations

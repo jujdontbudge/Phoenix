@@ -60,7 +60,7 @@ test('S1: an emulator-served engine response retains stateful fidelity', async t
   t.after(async () => { link?.abort('cleanup'); await engine?.close(); await rm(root, { recursive: true, force: true }); });
   engine = await startEngine({
     emulators: [{ plugin, options }], evidence: { events: [], body: async () => Buffer.alloc(0) },
-    start: 'beginning', clock: { start: time }, routes: {}, hmacKey: Buffer.alloc(32, 1),
+    clock: { start: time }, routes: {}, hmacKey: Buffer.alloc(32, 1),
     sample: { root: join(root, 'sample'), metadata: { capture: 'sample',
       harness: { name: 'review', tree: 'none' }, recipe: { name: 'review', version: '1' },
       routes: ['replay'], started_at: time, boot_id: 'review' } },
@@ -81,7 +81,7 @@ test('S1: an emulator-served engine response retains stateful fidelity', async t
   const context = { v: 1, capture: 'sample', stream: 'context', seq: 0, id: 'context:0',
     kind: 'meta', ts: { wall: time }, op: 'fidelity.context', body: { inline: JSON.stringify({
       source: 'snapshot', connectors: { calendar: { plugin_tier: 'stateful', coverage_tier: 'stateful', origin: 'captured', routes: ['http'] } },
-      start: { at: 'beginning' }, prefix_edits: [], container_runtime: 'docker', clock: {}, processes: [],
+      start: { at: 'beginning' }, container_runtime: 'docker', clock: {}, processes: [],
     }) } };
   const report = fidelityReport([context, ...capture.allEvents]);
   assert.equal(report.connectors[0].tier, 'stateful', 'ARCHITECTURE 3.13: an emulator gives stateful fidelity');

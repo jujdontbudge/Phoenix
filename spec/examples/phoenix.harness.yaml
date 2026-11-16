@@ -3,6 +3,6 @@ name: my-harness
 run:      { command: [node, dist/main.js, --task-file, "{task_file}"], output: stdout,
             build: [npm, run, build], image: { dockerfile: Dockerfile } }
 endpoints:
-  model:  { env: ANTHROPIC_BASE_URL, dialect: anthropic-messages }
+  model:  { env: ANTHROPIC_BASE_URL }
   mcp:    { file: .mcp.json, format: mcpServers }
 editable: ["prompts/**", "tools/*.json", "config/model.yaml"]

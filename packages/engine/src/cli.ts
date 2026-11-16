@@ -42,7 +42,6 @@ export function cliResponder(options: Responder & { invocation: CliInvocation })
         const exit = expected.stream === CLI_STREAM.control && decodeCliControl(bytes).type === "exit";
         if (exit && (actual || inputs.some(f => f.bytes.length || f.stream !== CLI_STREAM.stdin || !f.last))) return mismatch();
         await trace.append(stream, { kind: "result", surface: "cli", connector, op: `${expected.last ? "frame" : "fragment"}:back:${expected.stream}`, body: bytes, provenance: answer.provenance, resolver: answer.resolver });
-        if (exit) await options.advance(answer);
         out.push(expected.stream, bytes, expected.last);
         continue;
       }

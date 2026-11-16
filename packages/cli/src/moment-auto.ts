@@ -3,7 +3,7 @@ import { setupSnapshotMoment } from "@phoenix/setup";
 import { MODEL_OPTIONS, setupProvider } from "./setup-model.ts";
 
 const USAGE = [
-  "Usage: phoenix moment create --auto --capture <dir> [--task <key>] --mark <event> [--start beginning|mark|<event>] --id <id>",
+  "Usage: phoenix moment create --auto --capture <dir> [--task <key>] --mark <event> [--start beginning] --id <id>",
   "         [--check <file> | --correction <event>] [--workdir <snapshot> | --no-workdir] [--include-ignored | --no-include-ignored]",
   "         [--plugins <dir> ...] [--doc <file> ...] [--model <id> --model-endpoint <url> [--model-dialect <dialect>]]",
   "         [--prompt <text>] [--timezone <tz>] <out-dir>",
@@ -22,7 +22,8 @@ export async function runMomentAutoCommand(args: string[]): Promise<number> {
   const [out, ...rest] = positionals;
   if (!out || rest.length || !v.capture || !v.mark || !v.id || (v.check && v.correction) || (v.workdir && v["no-workdir"]) || (v["include-ignored"] && v["no-include-ignored"])) throw new Error(USAGE);
   const provider = setupProvider(v);
-  const start = v.start === undefined || v.start === "beginning" || v.start === "mark" ? v.start : { at: v.start };
+  if (v.start !== undefined && v.start !== "beginning") throw new Error("A moment made from a capture replays from the beginning only: Phoenix does not replay recorded LLM traffic to reach a later point");
+  const start = "beginning" as const;
   const { manifest, fills, missing } = await setupSnapshotMoment({
     capture: v.capture, task: v.task, mark: v.mark, start, id: v.id, out, check: v.check, correction: v.correction,
     workdir: v["no-workdir"] ? false : v.workdir, includeIgnored: v["include-ignored"] ? true : v["no-include-ignored"] ? false : undefined,

@@ -8,8 +8,6 @@ routes:
     surfaces:
       mcp: [mcp-proxy]
       cli: [cli-proxy]
-      http: [gateway, forward-proxy]
-model: { setting: OPENAI_BASE_URL, dialect: openai-chat }
 mcp: { file: .mcp.json, format: mcpServers }
 shim: [git, gh]
 transcript_reader: { command: [node, reader.js], harness_versions: [">=1.0.0"] }

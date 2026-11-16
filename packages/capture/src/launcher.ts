@@ -17,9 +17,9 @@ export async function launch(options: CaptureOptions) {
   const cwd = resolve(options.cwd ?? process.cwd()), home = resolve(options.home ?? process.env.PHOENIX_HOME ?? join(homedir(), ".phoenix"));
   const recipe = await readDescriptor(options.recipe, "recipe"), contractPath = resolve(cwd, options.contract ?? "phoenix.harness.yaml");
   const contract = await readDescriptor(contractPath, "harness");
-  const routes = options.routes ?? ["mcp-proxy", "cli-proxy", "gateway"];
+  const routes = options.routes ?? ["mcp-proxy", "cli-proxy"];
   const offered = new Set(recipe.routes.flatMap(route => Object.values(route.surfaces).flat()));
-  for (const route of routes) if (!offered.has(route)) throw new Error(`Recipe does not offer route: ${route}`);
+  for (const route of routes) if (!offered.has(route) || !["mcp-proxy", "cli-proxy"].includes(route)) throw new Error(`Recipe does not offer route: ${route}`);
   const id = randomUUID(), root = resolve(options.root ?? join(home, "captures", id));
   const started = new Date().toISOString();
   let tree: Buffer;
@@ -68,23 +68,7 @@ export async function launch(options: CaptureOptions) {
   };
   try {
     await ready(superviseCollector()).catch(async () => { await appendCoverage(root, { gap: "collector-unavailable-at-launch" }); });
-    let modelUrl: string | undefined;
-    if (routes.includes("gateway")) {
-      const model = contract.endpoints?.model;
-      if (!model) throw new Error("The gateway route needs the harness contract's model endpoint");
-      const base = env[model.env];
-      if (!base) throw new Error(`Set ${model.env} to the upstream model base URL`);
-      let port = "0";
-      const gatewayEnv = { ...env, PHOENIX_UPSTREAM: base };
-      const startGateway = () => {
-        const child = start("gateway", [port], gatewayEnv);
-        child.once("exit", () => { if (!stopping) setTimeout(() => { if (!stopping) startGateway(); }, 100).unref(); });
-        return child;
-      };
-      const address = await ready(startGateway()); port = String(address.port);
-      modelUrl = `http://127.0.0.1:${port}`;
-    }
-    const overlay = await applyRecipe({ cwd, runtime, entry: options.entry, recipe, contract, routes, env, modelUrl });
+    const overlay = await applyRecipe({ cwd, runtime, entry: options.entry, recipe, contract, routes, env });
     await writeFile(join(runtime, "snapshot.json"), JSON.stringify({ root, cwd, run: "default", home, started, copyIgnored: options.copyIgnored ?? recipe.copy_ignored ?? false }), { mode: 0o600 });
     process.stderr.write(`Capture: ${root}\n`);
     const harness = spawn(options.command[0]!, options.command.slice(1), { cwd: overlay.cwd, env: overlay.env, stdio: "inherit" });
@@ -116,7 +100,7 @@ export async function launch(options: CaptureOptions) {
     await Promise.all([...children].map(child => new Promise<void>(resolve => child.once("exit", () => resolve()))));
     await appendCoverage(root, { state: "closed", at: new Date().toISOString(), exit: result, configured: routes,
       ...(retainRuntime ? { retained_overlay: overlay.cwd } : {}),
-      limitations: ["Absolute-path commands and shell builtins bypass CLI shims", "CLI results do not capture filesystem side effects", "Only configured model endpoints are recorded", "New files in a generated config overlay remain in the retained overlay", "Provider-held history and unproxied surfaces need later coverage assessment"] });
+      limitations: ["Absolute-path commands and shell builtins bypass CLI shims", "CLI results do not capture filesystem side effects", "The harness's LLM traffic is not recorded", "New files in a generated config overlay remain in the retained overlay", "Provider-held history and unproxied surfaces need later coverage assessment"] });
     for (const plugin of options.plugins ?? []) await capturePlugin({ ...plugin, root, home }).catch(() => {});
     return { root, ...result };
   } finally {

@@ -14,7 +14,7 @@ test('S7: captured real evidence becomes recorded provenance during replay', asy
   }));
   const policy = () => ({});
   const index = await buildIndex(events, {
-    body: async event => Buffer.from(event.body.inline), policy, start: 'beginning',
+    body: async event => Buffer.from(event.body.inline), policy,
   });
   const result = await answerCall(toCall({
     surface: 'mcp', connector: 'fs', op: 'tools/list', args: {},

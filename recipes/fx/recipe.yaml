@@ -19,7 +19,6 @@
       "login_mode": "gateway-api-key",
       "surfaces": {
         "model": [
-          "gateway",
           "transcript"
         ],
         "mcp": [
@@ -37,7 +36,6 @@
       "login_mode": "gateway-oauth",
       "surfaces": {
         "model": [
-          "gateway",
           "transcript"
         ],
         "mcp": [
@@ -55,7 +53,6 @@
       "login_mode": "gateway-oidc",
       "surfaces": {
         "model": [
-          "gateway",
           "transcript"
         ],
         "mcp": [
@@ -113,7 +110,6 @@
       "login_mode": "custom-bearer",
       "surfaces": {
         "model": [
-          "gateway",
           "transcript"
         ],
         "mcp": [
@@ -131,7 +127,6 @@
       "login_mode": "custom-none",
       "surfaces": {
         "model": [
-          "gateway",
           "transcript"
         ],
         "mcp": [
@@ -145,10 +140,6 @@
       }
     }
   ],
-  "model": {
-    "setting": "PHOENIX_FX_MODEL_URL via route-model.mjs; FX_GATEWAY_CHAT_URL or providers.<name>.base_url",
-    "dialect": "gateway: Vercel AI SDK v4 wire (capture only); custom: openai-chat-completions"
-  },
   "mcp": {
     "file": ".mcp.json",
     "format": "mcpServers"

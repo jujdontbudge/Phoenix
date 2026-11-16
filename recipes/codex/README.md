@@ -13,16 +13,10 @@ node recipes/codex/capture.ts --login-mode chatgpt --cwd /path/to/task \
   --routes mcp-proxy,cli-proxy,transcript -- exec --skip-git-repo-check 'List the files'
 ```
 
-Routes are explicit. For an **already selected custom provider**, add `gateway`
-to capture model HTTP requests and streamed Responses responses. The launcher
-points that provider's `base_url` at the gateway and disables its WebSocket
-transport for this launch. All other provider fields, headers, environment-key
-references and credential helpers remain Codex's own. Built-in OpenAI still
-attempts WebSockets in this version despite its feature overrides, so this HTTP
-gateway refuses it: use transcripts without changing providers. Name the actual
-login mode; the launcher never switches between subscription and API billing.
-If HTTP/SSE or endpoint overrides are disallowed, omit `gateway` and use
-`transcript`. No TLS interception is attempted.
+Routes are explicit. Capture never touches Codex's LLM traffic: Codex talks to
+its provider exactly as configured, and its session file is the record of what
+it said to its LLM. Name the actual login mode; the launcher never switches
+between subscription and API billing. No TLS interception is attempted.
 
 ## Put Codex back in a moment
 
@@ -90,38 +84,27 @@ Put the image ID and the path to `recipe.yaml` in the Workbench settings.
 
 ### Limits
 
-- A tool call the session never made gets no answer, and the replay stops
-  there. Codex often runs a new shell command first, like `pwd`, so many
-  replays stop early. Ticket T11 (JOH-55) owns the fix, for every harness.
+- A shell command the session never ran runs on the files copy only when it
+  just reads files, like `pwd`, `ls` or `cat`. Anything else, like `git status`,
+  gets a made-up answer, or stops the replay when no simulator is set.
 - The box runs Codex 0.169.0. Its own tool descriptions and base instructions
   can differ from the ones in an older session.
 - Other sites on chatgpt.com can be reached from the box.
 - A user turn with images or files can't be a moment yet.
 - The resumed run uses the real clock.
 
-## Login coverage
+## Logins
 
-| Mode | Live model capture | Fallback |
-| --- | --- | --- |
-| `api-key` | Not offered for built-in OpenAI: its WebSocket transport bypasses this HTTP tap | Session reader; Codex retains its stored/environment API key |
-| `chatgpt` | Not offered for built-in OpenAI; browser OAuth and device-code sign-in use the same session mode | Session reader with the existing ChatGPT login |
-| `chatgpt-custom-provider` | Already selected custom provider URL, preserving its ChatGPT-auth configuration and backend | Session reader if endpoint overrides are disallowed |
-| `custom-api-key` | Active `model_providers` base URL; `env_key`, bearer-token or header config unchanged | Session reader |
-| `custom-oauth` | Active custom provider URL; its own browser OAuth/token store remains in use | Session reader when the OAuth audience/endpoint cannot be reverse-routed |
-| `command-auth` | Active provider URL; its `auth.command` still obtains credentials | Session reader |
-| `local` | A custom OpenAI-compatible local provider with explicit URL needs no Codex login | Session reader for built-in Ollama/LM Studio selection without an explicit custom URL |
-| `bedrock` / `vertex` | Not offered: native signing and cloud credential paths aren't an ordinary Responses reverse route | Session reader; no replacement provider or API-key login |
-
-MCP and PATH capture are independent of model login. A failed explicitly chosen
-route fails loudly; it is never silently replaced. The table describes route
-availability, not a claim that every account mode was exercised. The real proof
-used the Mac's existing ChatGPT login and selected custom provider. Profiles,
+Every login mode works the same way for capture, because the launcher never
+touches Codex's LLM route: MCP and PATH capture and the session reader.
+A failed explicitly chosen
+route fails loudly; it is never silently replaced. The real proof used the Mac's existing ChatGPT login. Profiles,
 CLI config/profile overrides (including attached `-c`/`-p`), `--oss`,
 `--ignore-user-config` and `--ephemeral` are refused by this fresh-`exec`
 launcher. Codex `-C`/`--cd` and `--worktree` are also refused: set the recipe's
 `--cwd` so Codex and the snapshot use one canonical task directory. A
 `.codex/config.toml` between the Git project root and that directory makes routing
-ambiguous, so live model/MCP routes are refused; transcript-only capture and
+ambiguous, so live MCP routing is refused; transcript-only capture and
 normal Codex invocation followed by explicit import remain available. Managed
 restrictions are never bypassed.
 
@@ -163,7 +146,7 @@ node packages/cli/src/import.ts --recipe recipes/codex/recipe.yaml \
 ```
 
 Or launch with `--routes transcript` to snapshot the task directory and import
-only newly created session files after exit, with no tool/model proxy. Resumed
+only newly created session files after exit, with no tool proxy. Resumed
 files, paginated history, disabled session logging and ephemeral runs may not
 produce a new JSONL file; the launcher records a gap and exits nonzero. Import
 an explicitly selected file yourself rather than sweeping someone's old logs.
@@ -172,8 +155,8 @@ The reader consumes stdin, not `PHOENIX_SOURCE`. It keeps logged response items,
 call IDs, function/custom-tool inputs and outputs, base instructions, turn
 context and wall times. Completed command/MCP items expose their logged
 argv/exit code or server/tool/arguments/results as semantic call/result events;
-the raw model-visible wrapper remains separate and isn't guessed into a wire
-request. Other event-log duplicates remain metadata. It does **not** invent model
+the raw wrapper the LLM saw remains separate and isn't guessed into a wire
+request. Other event-log duplicates remain metadata. It does **not** invent LLM
 HTTP exchanges, MCP envelopes, protocol versions, raw streams, terminal controls,
 timings or missing reasoning. Reconstructed
 answers belong to setup and must be tagged derived/synthesized. Unknown record
@@ -184,38 +167,12 @@ and imports only a new file with that tag, so concurrent unrelated sessions
 aren't swept into the capture. Its `--single-run` reader argv associates those
 items with the one live Run; explicit imports retain the logged session ID.
 
-## Replay and clock
+## Clock
 
-Use the imported trace together with any live tap evidence to set up a Moment,
-approve its check, and run `packages/cli/src/replay.ts echo` before trying a later
-start point. Session-only evidence cannot prove wire-level equivalence: fills
-and uncompared fields must remain visible in the fidelity report. Do not turn
-logged items into invented HTTP requests to make echo pass.
-Streams that end before transport EOF remain partial even when an SSE
-`response.completed` event was observed; those responses cannot back an echo.
-The real proof captured model traffic, MCP and PATH calls and imported the
-session, but its echo was blocked by missing complete model responses and a
-model-catalog request prefix mismatch. It is not a successful equivalence proof.
-
-The recipe doesn't ship a vendor binary or credentials. Build a sandbox image
-with the matching Linux Codex version and the Phoenix relay, pin its image
-digest, and configure its harness entrypoint to read the runner's endpoint
-environment. The optional `replay.ts` bridge is such an entrypoint: copy it into
-the base harness tree; use `[node, replay.ts, "{task_file}"]` as its command,
-`PHOENIX_CODEX_MODEL_URL`/`openai-responses` as the model endpoint, and
-`.phoenix-mcp.json`/`mcpServers` as its MCP endpoint. That JSON file names the
-captured servers so the runner can substitute its relays. Set nonsecret
-`CODEX_MODEL` and optionally `CODEX_REASONING_EFFORT` in the Replay request.
-The bridge creates a private temporary Codex home with placeholder auth, never
-uses a host credential, and bypasses Codex's inner sandbox only inside Phoenix's
-already isolated workload. Match any further captured config yourself; a
-different OS, cwd or system context can produce an honest echo prefix drift,
-which means later starts aren't supported by that base.
-
-Copy `clock-probe.ts` into that tree and set `clock.probe` to
+Copy `clock-probe.ts` into a harness tree and set `clock.probe` to
 `[node, clock-probe.ts]`. It starts native Codex in a private temporary home with
-placeholder auth and an unreachable loopback model URL, prints the first native
-session timestamp, then terminates and cleans up. No real model call or login
+placeholder auth and an unreachable loopback LLM URL, prints the first native
+session timestamp, then terminates and cleans up. No real LLM call or login
 is needed. The default static Linux musl binary ignores libfaketime in the
 exercised image, so its observed clock mode is real. Clock coverage is
 informational and does not lower fidelity.

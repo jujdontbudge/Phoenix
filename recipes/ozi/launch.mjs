@@ -8,7 +8,7 @@ async function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     "source-home": { type: "string", default: process.env.OZI_HOME ?? join(homedir(), ".ozi") },
     home: { type: "string" }, instance: { type: "string" }, driver: { type: "string" },
-    "model-env": { type: "string" }, "mcp-file": { type: "string" },
+    "mcp-file": { type: "string" },
   } });
 
   if (!values.home || !values.instance || !values.driver || !positionals.length) throw new Error("Name --home, --instance, --driver and -- ozi serve arguments");
@@ -27,10 +27,6 @@ async function main() {
   if ((instance.environment ?? []).some(entry => entry.valueRedacted === true) || JSON.stringify(instance.config).includes('"••••••"')) throw new Error("Native credentials remain in the existing Ozi secret store; use its transcript route");
   const environment = new Map((instance.environment ?? []).map(entry => [entry.name, entry]));
   environment.set("PATH", { name: "PATH", value: process.env.PATH ?? "", sensitive: false });
-  if (values["model-env"]) {
-    if (!/^[A-Z][A-Z0-9_]*$/.test(values["model-env"]) || !process.env.PHOENIX_MODEL_BASE_URL) throw new Error("Set PHOENIX_MODEL_BASE_URL and name the native model environment setting");
-    environment.set(values["model-env"], { name: values["model-env"], value: process.env.PHOENIX_MODEL_BASE_URL, sensitive: false });
-  }
   const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
   if (values["mcp-file"]) {
     const file = resolve(values["mcp-file"]);

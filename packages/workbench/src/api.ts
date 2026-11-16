@@ -251,7 +251,7 @@ export class Workbench {
         baseline: { verdict: baseline.verdict.verdict, counts: baseline.verdict.counts, meets_check: baseline.verdict.meets_check ?? null },
         improved: "improved" in compared ? compared.improved ?? null : null, target_pass: compared.target_pass, baseline_did_not_reproduce: compared.baseline_did_not_reproduce,
         counts_toward_patch: countsTowardPass(verdict), fidelity_grade: result.fidelity_grade ?? null,
-        leaned_on_made_up: result.leaned_on_made_up ?? false, files_copy: result.files_copy ?? null,
+        leaned_on_made_up: verdict.verdict === "incomplete" ? null : result.leaned_on_made_up ?? false, files_copy: result.files_copy ?? null,
         samples: candidate.samples, baseline_samples: entry.baseline ? baseline.samples : undefined,
       });
     }

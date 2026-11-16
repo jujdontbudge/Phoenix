@@ -1,11 +1,9 @@
 import type { TraceEvent } from "@phoenix/formats";
-import { completeModelStream, decodeHttpHead, decodeJson, header, type HttpRequest, type ModelDialectName, type Surface } from "@phoenix/wire";
+import { decodeHttpHead, decodeJson, header, type HttpRequest, type Surface } from "@phoenix/wire";
 import { httpShape, mcpShape, toCall } from "./normalize.ts";
 import { cliRecording, cliShape } from "./cli.ts";
 import { mcpHttpMessages, mcpHttpShape } from "./mcp-http.ts";
 import type { CallMessage, ConnectorPolicy, Exchange, ExchangeIndex, Provenance, WireMessage } from "./types.ts";
-
-export type StartPoint = "beginning" | "echo" | { at: string };
 
 const eventId = (e: TraceEvent): string => e.id ?? `${e.stream}:${e.seq}`;
 
@@ -60,13 +58,13 @@ async function pairMcp(list: readonly TraceEvent[], body: (e: TraceEvent) => Pro
   return paired;
 }
 
-async function pairHttp(list: readonly TraceEvent[], body: (e: TraceEvent) => Promise<Uint8Array>, surface: "http" | "mcp" = "http", model?: { connector: string; dialect: ModelDialectName }): Promise<Paired[]> {
+async function pairHttp(list: readonly TraceEvent[], body: (e: TraceEvent) => Promise<Uint8Array>, surface: "http" | "mcp" = "http"): Promise<Paired[]> {
   const framed = list.some(e => e.op === "open");
   const call = list.find(e => framed ? e.op === "frame:out:0" : e.kind === "call");
   const result = list.find(e => framed ? e.op === "frame:back:2" : e.kind === "result" && e.op !== "fragment:back:2");
   const requestMeta = framed ? list.find(e => e.op === "open") : list.filter(e => e.kind === "meta")[0];
   const responseMeta = framed ? list.find(e => e.op === "frame:back:1") : list.filter(e => e.kind === "meta")[1];
-  if (!call || !result || !requestMeta || !responseMeta || call.partial) return [];
+  if (!call || !result || !requestMeta || !responseMeta || call.partial || result.partial) return [];
   const head = decodeJson(await body(requestMeta));
   if (!head.ok) return [];
   const request = { body: await body(call), head: (framed ? (head.value as { meta: { request: HttpRequest } }).meta.request : head.value) as HttpRequest,
@@ -74,14 +72,6 @@ async function pairHttp(list: readonly TraceEvent[], body: (e: TraceEvent) => Pr
   const shape = surface === "mcp" ? mcpHttpShape(request.head, request.body) : httpShape(request.head, request.body);
   const encoding = result.body?.content_encoding;
   const response = { body: await body(result), head: decodeHttpHead(await body(responseMeta)), ...(encoding ? { contentEncoding: encoding } : {}) };
-  if (result.partial) {
-    if (!result.transport_partial || surface !== "http" || !model || model.connector !== result.connector) return [];
-    const complete = completeModelStream(model.dialect, response.body,
-      encoding ? response.head.headers.filter((_, i, headers) => headers[i - i % 2]!.toLowerCase() !== "content-encoding") : response.head.headers);
-    if (!complete) return [];
-    response.body = complete;
-    response.contentEncoding = encoding ?? header(response.head.headers, "content-encoding");
-  }
   return [{
     call, result, surface, op: shape.op, args: shape.args, request, during: [], after: [],
     response,
@@ -91,13 +81,8 @@ async function pairHttp(list: readonly TraceEvent[], body: (e: TraceEvent) => Pr
 export async function buildIndex(events: readonly TraceEvent[], options: {
   body(event: TraceEvent): Promise<Uint8Array>;
   policy(connector: string): ConnectorPolicy;
-  start: StartPoint;
   startTime?: string;
-  model?: { connector: string; dialect: ModelDialectName };
 }): Promise<ExchangeIndex> {
-  const at = typeof options.start === "object" ? options.start.at : undefined;
-  const cut = options.start === "beginning" ? 0 : at === undefined ? events.length : events.findIndex(e => eventId(e) === at);
-  if (cut < 0) throw new Error(`Start point is not an event of this run: ${at}`);
   const streams = new Map<string, TraceEvent[]>();
   for (const event of events) {
     if (!event.surface || !event.connector || !["call", "result", "meta"].includes(event.kind)) continue;
@@ -117,7 +102,7 @@ export async function buildIndex(events: readonly TraceEvent[], options: {
       if (http || decoded && decoded.ok && typeof (decoded.value as { method?: unknown }).method === "string") paired.push(...await pairHttp(list, options.body, "mcp"));
       else paired.push(...await pairMcp(list, options.body, notifications.get(connector)!));
     }
-    else if (list[0]!.surface === "http") paired.push(...await pairHttp(list, options.body, "http", options.model));
+    else if (list[0]!.surface === "http") paired.push(...await pairHttp(list, options.body, "http"));
     else if (list[0]!.surface === "cli") {
       const cli = await cliRecording(list, options.body);
       if (cli) paired.push({ ...cli, surface: "cli", ...cliShape(cli.invocation), request: { body: Buffer.from(JSON.stringify(cli.invocation)) }, response: { body: Buffer.from(JSON.stringify(cli.frames)) }, during: [], after: [] });
@@ -155,7 +140,7 @@ export async function buildIndex(events: readonly TraceEvent[], options: {
   const exchanges: Exchange[] = drafts.map(({ p, call, position, completed }) => ({
     id: eventId(p.call), surface: call.surface, layer: call.layer, connector: call.connector, op: call.op, args: call.args, key: call.key, readOnly: call.readOnly,
     history: writes.filter(w => w.call.connector === call.connector && w.completed < position).map(w => w.call.key),
-    frozen: completed < cut, position, completed, observedAt: p.result.ts.wall,
+    frozen: false, position, completed, observedAt: p.result.ts.wall,
     provenance: (p.result.provenance === "derived" || p.result.provenance === "synthesized" ? p.result.provenance : "recorded") as Provenance,
     request: p.request, response: p.response, during: p.during, after: p.after,
   }));
@@ -176,7 +161,6 @@ export async function buildIndex(events: readonly TraceEvent[], options: {
     });
   }
   return {
-    exchanges, prefetch, frozen: exchanges.filter(e => e.frozen), continuation: exchanges.filter(e => !e.frozen), notifications, startTime,
-    cutTime: cut === 0 ? startTime : events[Math.min(cut, events.length - 1)]!.ts.wall,
+    exchanges, prefetch, frozen: [], continuation: exchanges, notifications, startTime, cutTime: startTime,
   };
 }

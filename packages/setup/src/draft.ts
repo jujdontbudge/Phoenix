@@ -5,7 +5,7 @@ import { parse, stringify } from "yaml";
 import { validate, type MomentManifest, type SuccessCheck, type TraceEvent } from "@phoenix/formats";
 import type { ModelProvider } from "@phoenix/model";
 import { digest } from "@phoenix/store";
-import { modelDialects, object } from "@phoenix/wire";
+import { object } from "@phoenix/wire";
 import { eventId, readEvidence } from "./evidence.ts";
 import { workdirTexts } from "./auto.ts";
 import { askAgent } from "./fill.ts";
@@ -41,21 +41,18 @@ export async function draftCheck(root: string, o: { provider: ModelProvider; doc
   const actions: { tool: string; args: unknown; event: string }[] = [];
   for (const call of evidence.mcp) if (call.op.startsWith("tools/call:")) actions.push({ tool: `${call.connector}.${call.op.slice(11)}`, args: object(call.request.params).arguments ?? {}, event: eventId(call.call) });
   for (const call of evidence.cli) actions.push({ tool: call.connector, args: call.argv, event: eventId(call.event) });
-  for (const use of evidence.toolUses) actions.push({ tool: use.name, args: use.args, event: eventId(use.event) });
   actions.sort((a, b) => events.findIndex((e) => eventId(e) === a.event) - events.findIndex((e) => eventId(e) === b.event));
-  const finalText = evidence.models.at(-1)?.response?.values.map((v) => (object(v).output as unknown[] ?? []).flatMap((item) => (object(item).content as unknown[] ?? []).map((c) => object(c).text)).filter((t) => typeof t === "string").join("")).join("");
   const workdir = m.workdir ? JSON.parse(await readFile(join(root, m.workdir), "utf8")) : undefined;
   const harness = workdir ? await workdirTexts(workdir, blob) : new Map<string, string>();
   const docs = Object.fromEntries(await Promise.all((o.docs ?? []).map(async (path) => [path, await readFile(path, "utf8")] as const)));
   const available = [
     ...Object.entries(m.connectors ?? {}).flatMap(([name, c]) => (c.tools ?? []).flatMap((t) => typeof t.name === "string" ? [`${name}.${t.name}`] : [])),
     ...[...evidence.toolLists].flatMap(([name, list]) => list.flatMap((t) => typeof object(t).name === "string" ? [`${name}.${object(t).name}`] : [])),
-    ...(evidence.definitions?.tools.map((t) => t.name) ?? []),
   ];
   const names = new Set([...actions.map((a) => a.tool), ...available]);
   const reply = await askAgent(o.provider, SYSTEM, {
     correction: { text: correction.body && "inline" in correction.body ? correction.body.inline : "", at: (correction as { at?: string }).at ?? null },
-    actions, availableTools: [...new Set(available)], finalText: finalText ?? null, harness: Object.fromEntries(harness), docs,
+    actions, availableTools: [...new Set(available)], harness: Object.fromEntries(harness), docs,
   }, (value) => {
     const draft = { ...object(value), phoenix_check: 1, samples: { base: 2, tiebreak: 1 } };
     const result = validate("check", draft);

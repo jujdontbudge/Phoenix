@@ -8,7 +8,6 @@ routes:
     surfaces:
       mcp: [mcp-proxy]
       cli: [cli-proxy]
-      http: [gateway]
 shim: [date, cat]
 clock:
   probe: [node, -e, "console.log(new Date().toISOString())"]

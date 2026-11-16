@@ -71,7 +71,6 @@ These imports create separate captures by default. Before importing into an exis
   "phoenix_harness": 1,
   "name": "fx",
   "run": {"command": ["fx", "acp"]},
-  "endpoints": {"model": {"env": "PHOENIX_FX_MODEL_URL", "dialect": "responses"}},
   "editable": ["prompts/**"]
 }
 ```
@@ -91,29 +90,21 @@ Connect an ACP client to that command. `acp.mjs` rewrites stdio entries in the c
 
 The selected CLI route adds `ls`, `cat` and `date` through PATH. Absolute commands, shell builtins, a shell startup that replaces PATH, and fx's fixed-path read-only command optimization bypass it. Native filesystem tools and direct/provider-native APIs also need the transcript fallback. A bare `ls` can use that optimization; a real shell invocation that retains PATH can reach the shim. CLI recording captures output/exit, not filesystem side effects. Inspect actual segments, not just configured routes.
 
-## Model routes by login mode
+## Logins
 
-| Existing login | Model route | Setting and limits |
-| --- | --- | --- |
-| Gateway API key (environment or Keychain), Vercel OAuth, Vercel OIDC | Gateway + transcript | `FX_GATEWAY_CHAT_URL` accepts a loopback HTTP URL. The unchanged fx auth flow supplies the credential. Protocol is Vercel AI SDK v4, not OpenAI wire. |
-| Codex/ChatGPT subscription | Transcript | The release has no supported model endpoint override. Test-only `FX_E2E_*` switches are not a supported capture route. No TLS interception or provider switch is attempted. |
-| Grok subscription | Transcript | Same pinned-endpoint restriction and fallback. |
-| Named custom bearer-env or no-auth connection | Gateway + transcript | `providers.NAME.base_url`; this fx release accepts only `openai-chat-completions` for configured connections. |
-
-For Gateway, set `PHOENIX_FX_MODEL_URL=https://ai-gateway.vercel.sh`, `PHOENIX_FX_MODE=gateway` and add `gateway` to `--routes`. The capture command replaces that environment variable with its loopback URL; `route-model.mjs` adds `/v4/ai/language-model` for fx. This records that model endpoint, not every auxiliary catalog, search or OAuth request. Phoenix currently has no Vercel AI SDK model-wire decoder, so recording this transport does not provide a supported frozen-prefix model Replay.
-
-For custom connections, set `PHOENIX_FX_MODEL_URL` to the **exact original API prefix**, `PHOENIX_FX_MODE=custom`, and `PHOENIX_FX_CONNECTION` to the already selected top-level connection name. The helper copies settings into a private temporary HOME and changes only that connection's base URL. It does not copy credentials/session files or select another provider; bearer values remain existing environment variables. Set the harness contract's dialect accordingly. Temporary HOME changes fx/tool home context and excludes the original profile's implicit MCP/skills/history, so explicitly supply the wanted MCP config, avoid workspace provider overrides, and include this difference in fidelity assessment. The temporary profile is removed on normal close. Use the transcript route if changing HOME is unacceptable. Abrupt host death can leave the private temporary settings copy for manual cleanup.
-
-Only the installed Codex subscription was available for real provider proof; the other login routes are declared from the matching release source and can be exercised against local protocol endpoints without spending another account's credits.
+Capture never touches fx's LLM route or login, for any login mode: fx talks to
+its provider exactly as configured, and its session log is the record of what
+it said to its LLM. Only the installed Codex subscription was available for a
+real proof.
 
 ## Replay and fidelity
 
 Build `Dockerfile` on top of a prepared Phoenix sandbox image and resolve the resulting image to its digest before giving it to runner. It includes the checksum-verified Linux fx release, not the Mac binary, credentials, sessions or a model account. `recipe.yaml`'s image name is a build target, not a mutable image passed to runner.
 
-Wire MCP/CLI evidence can replay those connectors. The current generic runner rewrites only `mcpServers` JSON configurations, so use that explicit config format when recording a run intended for echo. Live capture also accepts fx's canonical `mcp` command arrays, but the runner cannot directly rewrite that native format; it reports a setup failure rather than silently changing the evidence.
+Wire MCP/CLI evidence can replay those connectors. The current generic runner rewrites only `mcpServers` JSON configurations, so use that explicit config format when recording a run you want to replay from a capture. Live capture also accepts fx's canonical `mcp` command arrays, but the runner cannot directly rewrite that native format; it reports a setup failure rather than silently changing the evidence.
 
-Merged with a gap (JOH-55, JOH-61): made-up answers were last seen working on the code that became commit ba9d924f, not re-run on the final code. The simulator LLM they use, on OpenCode Go, was out of balance. No other LLM route on the Mac worked for it: DeepSeek was out of balance, the Zen and Kimi keys were expired or invalid, and ChatGPT's backend accepts only streamed replies, which the simulator doesn't send.
+Made-up answers need an LLM for the simulator. None was seen in an fx replay. When the simulator's account is out of balance, no made-up answer can be given and the replay stops at that call.
 
-Session evidence alone cannot supply missing provider requests, a complete system prompt, tool definitions, MCP envelopes or CLI frame bytes. Setup must explicitly derive/fill missing evidence, with its provenance. A pinned-subscription capture without model wire is **not a full frozen-prefix echo**; runner must report drift or incompleteness rather than a fabricated passing echo. Keep its fidelity report with the coverage report. Static fx clock coverage is real/unknown even when the Node probe is virtual; the recipe does not claim full clock virtualization.
+Session evidence alone cannot supply missing provider requests, a complete system prompt, tool definitions, MCP envelopes or CLI frame bytes. Setup must explicitly derive/fill missing evidence, with its provenance. Keep the fidelity report with the coverage report. Static fx clock coverage is real/unknown even when the Node probe is virtual; the recipe does not claim full clock virtualization.
 
-References: [fx v0.0.16 source](https://github.com/vercel-labs/fx/tree/v0.0.16), especially `src/builtins/gateway.zig`, `src/core/shared/profile_paths.zig`, `src/acp/sessions.zig`, `src/core/session_manager/schema.zig` and `src/core/output/output_contracts.zig`. Current online docs can describe newer fx releases; this recipe's version boundary is intentional.
+References: [fx v0.0.16 source](https://github.com/vercel-labs/fx/tree/v0.0.16), especially `src/core/shared/profile_paths.zig`, `src/acp/sessions.zig`, `src/core/session_manager/schema.zig` and `src/core/output/output_contracts.zig`. Current online docs can describe newer fx releases; this recipe's version boundary is intentional.

@@ -4,7 +4,7 @@ run:
   command: [node, src/index.ts, --task-file, "{task_file}"]
   output: stdout
 endpoints:
-  model: { env: MODEL_BASE_URL, dialect: openai-responses }
+  model: { env: MODEL_BASE_URL }
   mcp: { file: .mcp.json, format: mcpServers }
 editable:
   - src/**

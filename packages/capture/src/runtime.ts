@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { setPriority } from "node:os";
-import { httpGatewayTap, mcpHttpTap, mcpStdioTap, cliTap, exitLikeCommand } from "@phoenix/taps";
+import { mcpHttpTap, mcpStdioTap, cliTap, exitLikeCommand } from "@phoenix/taps";
 import { collect } from "./collector.ts";
 import { tee } from "./tee.ts";
 import { processBackend, httpBackend } from "./upstream.ts";
@@ -15,14 +15,6 @@ export async function captureRuntime(mode: string, args: string[]) {
   } else if (mode === "snapshot") {
     try { setPriority(0, 19); } catch {}
     await snapshot(JSON.parse(await readFile(args[0]!, "utf8")));
-  } else if (mode === "gateway") {
-    const server = httpGatewayTap({ backend: tee(httpBackend(connection => {
-      const request = (connection.meta as { request: { url: string } }).request;
-      return new URL(process.env.PHOENIX_UPSTREAM!.replace(/\/$/, "") + request.url);
-    }), { socket }), route: () => ({ surface: process.env.PHOENIX_GATEWAY_SURFACE === "mcp" ? "mcp" : "http", connector: process.env.PHOENIX_GATEWAY_CONNECTOR ?? "model" }) });
-    await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(Number(args[0]), "127.0.0.1", resolve); });
-    process.send?.({ port: (server.address() as { port: number }).port }); process.disconnect?.();
-    process.once("SIGTERM", () => { server.close(); server.closeAllConnections(); });
   } else if (mode === "mcp-http-proxy") {
     const [name, upstream] = args;
     const server = mcpHttpTap({ connector: name!, backend: tee(httpBackend(connection => {

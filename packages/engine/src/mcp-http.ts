@@ -81,7 +81,6 @@ export function mcpHttpResponder(options: Responder & {
     const sse = header(headers, "content-type")?.toLowerCase().includes("text/event-stream") ?? false;
     if (!raw.body.length && !sse) {
       await trace.append(stream, { kind: "result", surface: "mcp", connector, op: "frame:back:2", body: raw.body, provenance: answer.provenance, resolver: answer.resolver });
-      await options.advance(answer);
       out.push(HTTP_STREAM.responseHead, encodeHttpHead(head), true);
       out.push(HTTP_STREAM.responseBody, raw.body, true);
       out.end();
@@ -108,7 +107,6 @@ export function mcpHttpResponder(options: Responder & {
     await trace.append(stream, { kind: "result", surface: "mcp", connector, op: "frame:back:2", body: Buffer.concat(sent), chunks: timing, provenance: answer.provenance, resolver: answer.resolver });
     out.push(HTTP_STREAM.responseBody, new Uint8Array(), true);
     out.end();
-    await options.advance(answer);
   };
   return {
     async write(f) {

@@ -6,7 +6,7 @@ bodies by digest; there is no I/O or live connector access. Write the returned
 object to the sample directory in the caller.
 
 The engine emits a `meta` event with `op: fidelity.context` and JSON
-`FidelityContext` in its body: moment source; start and prefix edits; runtime,
+`FidelityContext` in its body: moment source; start point; runtime,
 clock probe and per-process clock coverage; and connectors keyed by name with
 plugin tier, captured-coverage tier, origin, routes and read-only operations.
 These are metadata bodies in the existing trace schema, not raw-traffic
@@ -18,8 +18,9 @@ grade, not an invented stateful grade.
 For each called connector the tier is the weakest plugin ceiling, coverage
 ceiling and actual response source: emulator is stateful; recorded, overlay,
 prefetch, repeat and derived are recorded; simulator and synthesized fills
-are synthesized; divergence/refusal is blocked. Inference API traffic and
-under-layer duplicate calls do not grade as tool connectors. Clock coverage,
+are synthesized; divergence/refusal is blocked. Under-layer duplicate calls do
+not grade as tool connectors, and the harness's LLM traffic is never in the
+trace. Clock coverage,
 including a real-clock harness, is informational and never lowers a tier.
 
 The report counts real/recorded/derived/synthesized responses and lists derived
@@ -29,7 +30,6 @@ that aren't visible in raw messages use `meta` events with JSON bodies and
 these operations:
 
 - `fidelity.answers` for filled/repeated answers and exact call references;
-- `fidelity.prefix_uncompared` for fields the frozen prefix couldn't compare;
 - `fidelity.unverified_read_only`, `fidelity.stale`,
   `fidelity.emulator_differences`, `fidelity.format_mismatches`;
 - `fidelity.local_file_effects` and `fidelity.workdir` for unrecreated shim

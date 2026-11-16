@@ -23,7 +23,7 @@ export async function evaluateCheck(check: SuccessCheck, input: EvidenceInput, o
   const validated = validate("check", check);
   if (!validated.ok) throw new Error(validated.errors.join("; "));
   let evidence: CheckEvidence;
-  try { evidence = collectEvidence(input, check.scope); }
+  try { evidence = collectEvidence(input); }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { evidence: { error: message, trace: [], actions: [], endStates: {}, notes: [message] }, expectations: (check.expect ?? []).map((_, expectation) => ({ expectation, outcome: "error", tainted: true, irreversible: false, evidenceThrough: 0, error: message })), intentRequired: check.intent !== undefined };

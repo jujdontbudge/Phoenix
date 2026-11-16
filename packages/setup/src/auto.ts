@@ -5,8 +5,8 @@ import type { ModelProvider } from "@phoenix/model";
 import { findPlugins } from "@phoenix/plugin-host";
 import { writeMomentBundle } from "@phoenix/store";
 import { prepareSnapshotMoment, type SnapshotMomentOptions } from "./manual.ts";
-import { eventId, readEvidence } from "./evidence.ts";
-import { classify, discoverConnectors, harnessMcpServers, inferFormats, modelIdentifier, pickTier } from "./discover.ts";
+import { readEvidence } from "./evidence.ts";
+import { classify, discoverConnectors, inferFormats, pickTier } from "./discover.ts";
 import { fillGaps, type FilledItem, type MissingItem } from "./fill.ts";
 
 export interface AutoSetupOptions extends Omit<SnapshotMomentOptions, "connectors"> {
@@ -31,9 +31,8 @@ export async function setupSnapshotMoment(o: AutoSetupOptions): Promise<{ manife
   const body = async (e: TraceEvent) => !e.body ? undefined : "inline" in e.body ? Buffer.from(e.body.inline) : prepared.store.get(e.body.blob);
   const evidence = await readEvidence(prepared.events, body);
   const files = prepared.workdir ? await workdirTexts(prepared.workdir, (hash) => prepared.store.get(hash)) : new Map<string, string>();
-  const connectors = discoverConnectors(evidence, harnessMcpServers(files));
+  const connectors = discoverConnectors(evidence);
   const corpus = new Map<string, string>([...files].map(([path, text]) => [`workdir:${path}`, text]));
-  if (evidence.definitions) corpus.set(`event:${eventId(evidence.definitions.event)}#/tools`, JSON.stringify(evidence.definitions.tools));
   for (const doc of o.docs ?? []) corpus.set(`doc:${doc}`, await readFile(doc, "utf8"));
   const { fills, missing } = await fillGaps({ evidence, connectors, corpus, ...(o.provider ? { provider: o.provider } : {}) });
   const plugins = await findPlugins([...o.plugins ?? []]);
@@ -49,9 +48,8 @@ export async function setupSnapshotMoment(o: AutoSetupOptions): Promise<{ manife
     if (formats) prepared.files.set(`data/formats/${name}.json`, JSON.stringify(formats, null, 2) + "\n");
   }
   for (const { path, fill } of fills) prepared.files.set(path, JSON.stringify(fill, null, 2) + "\n");
-  const model = modelIdentifier(evidence);
   const manifest: MomentManifest = {
-    ...prepared.manifest, ...(model ? { model } : {}), ...(o.correction ? { correction: o.correction } : {}), connectors,
+    ...prepared.manifest, ...(o.correction ? { correction: o.correction } : {}), connectors,
     ...(fills.length ? { fills: fills.map(({ path, fill }) => ({ path, tag: fill.tag, basis: fill.basis, producer: fill.producer })) } : {}),
   };
   await writeMomentBundle(o.out, { manifest, files: prepared.files, blobs: prepared.blobs });

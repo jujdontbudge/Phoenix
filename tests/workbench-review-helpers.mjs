@@ -19,7 +19,7 @@ export async function fixture(t, check, baseChange) {
   await mkdir(join(repo, 'prompts'), { recursive: true });
   await mkdir(moments);
   const contract = { phoenix_harness: 1, name: 'review', run: { command: ['node', 'harness.mjs'] },
-    endpoints: { model: { env: 'MODEL_URL', dialect: 'chat-completions' } }, editable: ['prompts/**'] };
+    endpoints: { model: { env: 'MODEL_URL' } }, editable: ['prompts/**'] };
   await save(join(repo, 'phoenix.harness.yaml'), contract);
   await writeFile(join(repo, 'prompts/system.md'), 'original\n');
   await writeFile(join(repo, 'readonly.txt'), 'original\n');
@@ -62,7 +62,7 @@ export async function finishedReplay(f, statuses, { discounted = false, assessme
   }
   const verdict = momentVerdict(samples, f.check.samples);
   const result = { phoenix_result: 1, plan: id, check: f.bundle.lock.check, ledger_entry: f.entry,
-    start: 'beginning', prefix_edits: [], samples, tiebreak_ran: false, verdict: verdict.verdict,
+    start: 'beginning', samples, tiebreak_ran: false, verdict: verdict.verdict,
     ...(verdict.meets_check !== undefined ? { meets_check: verdict.meets_check } : {}), discount: verdict.discount,
     fidelity_grade: discounted ? 'synthesized' : 'recorded' };
   const resultPath = join(directory, 'result.json');

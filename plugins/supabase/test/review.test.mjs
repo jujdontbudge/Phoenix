@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -11,6 +11,10 @@ import { takeSnapshot } from "../src/dump.mjs";
 import { seed } from "../src/seed.mjs";
 
 let root, process;
+const pgdata = "/var/lib/phoenix/pgdata";
+const skip = existsSync(pgdata) && globalThis.process.env.PHOENIX_PG_BIN ? false : "needs the plugin image, which holds " + pgdata + " and PHOENIX_PG_BIN; see the README";
+if (skip) console.log("Skipping the Supabase copy tests: " + skip);
+const it = (name, fn) => test(name, { skip }, fn);
 let serial = 0;
 async function client(database = "postgres") {
   const connection = new pg.Client({ host: root, user: "supabase_admin", database });
@@ -19,9 +23,10 @@ async function client(database = "postgres") {
 }
 
 before(async () => {
+  if (skip) return;
   root = mkdtempSync(join(tmpdir(), "supabase-review-"));
   const data = join(root, "data");
-  cpSync("/var/lib/phoenix/pgdata", data, { recursive: true });
+  cpSync(pgdata, data, { recursive: true });
   process = spawn(join(globalThis.process.env.PHOENIX_PG_BIN, "postgres"), ["-D", data,
     "-c", "listen_addresses=", "-c", "unix_socket_directories=" + root,
     "-c", "shared_buffers=32MB"], { stdio: "ignore" });
@@ -62,7 +67,7 @@ async function fixture(setup, options) {
 
 const sql = (copy, query) => copy.handle("POST", "/v1/projects/synthetic/database/query", "api.supabase.com", JSON.stringify({ query, read_only: false }));
 
-test("S1: zero statistics do not prove an uncaptured table is empty", async () => {
+it("S1: zero statistics do not prove an uncaptured table is empty", async () => {
   const { real, copy, snapshot } = await fixture(
     "SET track_counts = off; CREATE TABLE items (id int); INSERT INTO items VALUES (1)",
     { tables: [] });
@@ -76,7 +81,7 @@ test("S1: zero statistics do not prove an uncaptured table is empty", async () =
   } finally { await real.end(); }
 });
 
-test("S2: a function cannot read a partially captured table as if it were complete", async () => {
+it("S2: a function cannot read a partially captured table as if it were complete", async () => {
   const { real, copy } = await fixture(
     "CREATE TABLE items (id int); INSERT INTO items VALUES (1), (2); " +
     "CREATE FUNCTION item_count() RETURNS bigint LANGUAGE plpgsql AS $$ BEGIN RETURN (SELECT count(*) FROM items); END $$",
@@ -91,7 +96,7 @@ test("S2: a function cannot read a partially captured table as if it were comple
   } finally { await real.end(); }
 });
 
-test("S3: migrations must not compute writes from partially captured rows", async () => {
+it("S3: migrations must not compute writes from partially captured rows", async () => {
   const { real, copy } = await fixture(
     "CREATE TABLE items (id int); INSERT INTO items VALUES (1), (2)",
     { tables: ["items"], rowLimit: 1 });
@@ -106,7 +111,7 @@ test("S3: migrations must not compute writes from partially captured rows", asyn
   } finally { await real.end(); }
 });
 
-test("S4: logs from an unrelated time window must miss", async () => {
+it("S4: logs from an unrelated time window must miss", async () => {
   const url = (start, end) => "https://api.supabase.com/v1/projects/synthetic/analytics/endpoints/logs?" + new URLSearchParams({
     sql: "select timestamp, event_message from postgres_logs", iso_timestamp_start: start, iso_timestamp_end: end,
   });
@@ -119,7 +124,7 @@ test("S4: logs from an unrelated time window must miss", async () => {
   assert.equal(answer.status, 501, `An unseen window returned unrelated recorded logs: ${answer.body}`);
 });
 
-test("S5: a truncated parent must not cause a false foreign-key error on a fully held child", async () => {
+it("S5: a truncated parent must not cause a false foreign-key error on a fully held child", async () => {
   const admin = await client();
   try {
     await admin.query("CREATE DATABASE source_fk");
@@ -145,7 +150,7 @@ test("S5: a truncated parent must not cause a false foreign-key error on a fully
   } finally { await real.end(); }
 });
 
-test("S6: deferred triggers must not commit results computed from partially captured rows", async () => {
+it("S6: deferred triggers must not commit results computed from partially captured rows", async () => {
   const { real, copy } = await fixture(
     "CREATE TABLE items (id int); INSERT INTO items VALUES (1), (2); " +
     "CREATE TABLE events (id int); CREATE TABLE totals (n bigint); " +
@@ -166,7 +171,7 @@ test("S6: deferred triggers must not commit results computed from partially capt
   } finally { await real.end(); }
 });
 
-test("S7: a missed statement must not consume sequence values used by later writes", async () => {
+it("S7: a missed statement must not consume sequence values used by later writes", async () => {
   const { real, copy } = await fixture(
     "CREATE TABLE items (id int); INSERT INTO items VALUES (1), (2); " +
     "CREATE TABLE events (id serial PRIMARY KEY, n bigint)",
@@ -187,7 +192,7 @@ test("S7: a missed statement must not consume sequence values used by later writ
   } finally { await real.end(); }
 });
 
-test("S7: a miss must preserve an uncalled sequence set by an earlier replay write", async () => {
+it("S7: a miss must preserve an uncalled sequence set by an earlier replay write", async () => {
   const { real, copy } = await fixture(
     "CREATE TABLE items (id int); INSERT INTO items VALUES (1), (2); " +
     "CREATE TABLE events (id serial PRIMARY KEY)",

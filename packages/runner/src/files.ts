@@ -16,11 +16,6 @@ export function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function echoDriftPath(root: string, baseTree: string, loginContext: readonly { name: string; pattern: string }[] | undefined): string {
-  const key = loginContext?.length ? digest(canonical({ base_tree: baseTree, login_context: loginContext })) : baseTree;
-  return join(root, "echo-drift", key.slice(7) + ".json");
-}
-
 export async function save(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
@@ -91,18 +86,6 @@ export function bundleEvidence(bundle: MomentBundle): TraceEvent[] {
     event.provenance = value.tag;
   }
   return events;
-}
-
-export function hydrate(events: readonly TraceEvent[], files: MomentBundle["files"]): TraceEvent[] {
-  return events.map(event => {
-    if (!event.body || "inline" in event.body) return event;
-    const bytes = files.get(`data/blobs/${event.body.blob.slice(7)}`);
-    if (!bytes || digest(bytes) !== event.body.blob) throw new Error(`Missing or corrupt evidence blob: ${event.body.blob}`);
-    try {
-      const inline = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      return { ...event, body: { inline, ...(event.body.content_encoding ? { content_encoding: event.body.content_encoding } : {}) } };
-    } catch { return event; }
-  });
 }
 
 export async function bundleBody(bundle: MomentBundle, event: TraceEvent): Promise<Uint8Array> {

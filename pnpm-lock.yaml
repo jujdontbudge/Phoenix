@@ -401,6 +401,9 @@ importers:
       '@secretlint/core':
         specifier: ^13.1.0
         version: 13.1.0
+      '@secretlint/profiler':
+        specifier: ^13.1.0
+        version: 13.1.0
       '@secretlint/secretlint-rule-preset-recommend':
         specifier: ^13.1.0
         version: 13.1.0

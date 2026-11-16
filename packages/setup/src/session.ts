@@ -218,6 +218,7 @@ export async function createSessionMoment(o: SessionMomentOptions): Promise<Mome
       changes.push("--change", `${change.line}=${file}`);
     }
     const child = spawn(command!, [...args, ...where, ...changes, ...(stripped.size ? ["--files", join(scratch, "files")] : [])], { cwd: o.recipe.directory, stdio: ["pipe", "pipe", "pipe"] });
+    child.stdin.on("error", () => {});
     child.stdin.end(Buffer.from(lines.join("\n")));
     [stdout, stderr, code] = await Promise.all([text(child.stdout), text(child.stderr), new Promise<number | null>(done => child.once("close", done))]);
   } finally { await rm(scratch, { recursive: true, force: true }); }

@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 let temporary, signalToRaise;
@@ -18,8 +17,7 @@ try {
   temporary = await mkdtemp(join(tmpdir(), "phoenix-fx-launch-"));
   await writeFile(join(temporary, "recipe.json"), JSON.stringify(recipe), { mode: 0o600 });
   await writeFile(join(temporary, "contract.json"), JSON.stringify(contract), { mode: 0o600 });
-  let command = args.slice(split + 1);
-  if (routes.split(",").includes("gateway")) command = [process.execPath, fileURLToPath(new URL("./route-model.mjs", import.meta.url)), process.env.PHOENIX_FX_MODE, ...command];
+  const command = args.slice(split + 1);
   const phoenix = JSON.parse(process.env.PHOENIX_COMMAND ?? '["phoenix"]');
   const child = spawn(phoenix[0], [...phoenix.slice(1), "capture", "--recipe", join(temporary, "recipe.json"), "--contract", join(temporary, "contract.json"), "--cwd", cwd, "--routes", routes, ...(values.output ? ["--output", resolve(values.output)] : []), ...(values["copy-ignored"] ? ["--copy-ignored"] : []), "--", ...command], { env: { ...process.env, PHOENIX_FX_MCP_PROXY: String(routes.split(",").includes("mcp-proxy")) }, stdio: "inherit" });
   const handlers = new Map(["SIGINT", "SIGTERM", "SIGHUP"].map(signal => [signal, () => child.kill(signal)]));

@@ -15,6 +15,7 @@ export interface MaterializeOptions {
   bindings?: Bindings;
   directory: string;
   env?: Readonly<Record<string, string>>;
+  llm: string;
 }
 
 export interface MaterializedTree {
@@ -198,7 +199,7 @@ socket.on("connect", () => {
   for (const [key, captured] of Object.entries(config.env)) {
     const actual = process.env[key];
     if (actual === undefined) continue;
-    env[key] = key === "PATH" && actual === config.path || key === config.modelEnv && actual === "http://phoenix-model:8080" ? captured : actual;
+    env[key] = key === "PATH" && actual === config.path ? captured : actual;
   }
   const cwd = process.cwd();
   if (cwd !== "/worktree" && !cwd.startsWith("/worktree/")) { fail(new Error("CLI invocation is outside /worktree")); return; }
@@ -308,9 +309,7 @@ export async function materialize(options: MaterializeOptions): Promise<Material
   }
 
   const routes: MaterializedTree["routes"] = { mcp: Object.create(null), mcpHttp: Object.create(null), http: Object.create(null), cli: Object.create(null) };
-  routes.http["phoenix-model"] = "model";
-  routes.http["phoenix-model:8080"] = "model";
-  const env: Record<string, string> = { ...options.env, [endpoints.model.env]: "http://phoenix-model:8080" };
+  const env: Record<string, string> = { ...options.env, [endpoints.model.env]: options.llm };
   const replayPath = `/phoenix/bin:${env.PATH ?? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}`;
   const hostFor = (surface: string, connector: string) => `${surface}-${/^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$/.test(connector) ? connector : digest(connector).slice(7, 47)}`;
   const mcp: Record<string, unknown> = Object.create(null);
@@ -342,7 +341,7 @@ export async function materialize(options: MaterializeOptions): Promise<Material
       if (typeof settings.url === "string") {
         const path = `/mcp/${encodeURIComponent(connector)}`;
         routes.mcpHttp[path] = connector;
-        mcp[name] = { ...(typeof settings.type === "string" ? { type: settings.type } : {}), url: `http://phoenix-model:8080${path}` };
+        mcp[name] = { ...(typeof settings.type === "string" ? { type: settings.type } : {}), url: `http://phoenix-tools:8080${path}` };
       } else if (typeof settings.command === "string") {
         const host = hostFor("mcp", connector);
         if (routes.mcp[host]) throw new Error(`Duplicate MCP relay host: ${host}`);
@@ -362,7 +361,7 @@ export async function materialize(options: MaterializeOptions): Promise<Material
         const host = hostFor("cli", connector);
         if (routes.cli[host]) throw new Error(`Duplicate CLI relay host: ${host}`);
         routes.cli[host] = connector;
-        cli[command] = { host, argv0: invocation.argv[0], cwd: /^(.*\/runtime\/capture-[^/]+\/cwd)(?:\/|$)/.exec(invocation.cwd)?.[1] ?? originalCwd ?? invocation.cwd, env: invocation.env, modelEnv: endpoints.model.env, path: replayPath };
+        cli[command] = { host, argv0: invocation.argv[0], cwd: /^(.*\/runtime\/capture-[^/]+\/cwd)(?:\/|$)/.exec(invocation.cwd)?.[1] ?? originalCwd ?? invocation.cwd, env: invocation.env, path: replayPath };
       } else {
         for (const event of evidence) {
           if (event.kind !== "meta" || !event.body) continue;

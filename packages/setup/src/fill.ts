@@ -1,7 +1,7 @@
 import { validate, type Fill } from "@phoenix/formats";
 import type { ModelProvider } from "@phoenix/model";
-import { canonicalJson, deriveMcpResult, deriveSerializedMcpResult, deriveToolList, object, type FillDerivation, type FillLocation } from "@phoenix/wire";
-import { attributeToolUse, eventId, type RunEvidence } from "./evidence.ts";
+import { canonicalJson, deriveMcpResult, deriveSerializedMcpResult, object, type FillDerivation, type FillLocation } from "@phoenix/wire";
+import { eventId, type RunEvidence } from "./evidence.ts";
 import type { Connector } from "./discover.ts";
 
 export interface FilledItem { path: string; fill: Fill }
@@ -80,16 +80,6 @@ function deriveResult(text: string, location: FillLocation): FillDerivation {
   return serialized.ok ? serialized : deriveMcpResult(text, location);
 }
 
-function mechanicalToolList(evidence: RunEvidence, name: string, connectors: Record<string, Connector>): Fill | undefined {
-  if (!evidence.definitions || Object.keys(connectors).length !== 1) return undefined;
-  const location = { evidence: `event:${eventId(evidence.definitions.event)}#/tools`, connector: name };
-  for (const dialect of ["responses", "chat-completions", "messages", "generate-content"] as const) {
-    const derived = deriveToolList(evidence.definitions.request, dialect, location);
-    if (derived.ok) return derived.fill;
-  }
-  return undefined;
-}
-
 export async function fillGaps(o: {
   evidence: RunEvidence;
   connectors: Record<string, Connector>;
@@ -103,9 +93,8 @@ export async function fillGaps(o: {
     if (connector.surface !== "mcp") continue;
     for (const item of ["mcp.initialize.result", "mcp.tools/list.result"]) {
       if (item === "mcp.initialize.result" ? o.evidence.initialize.has(name) : o.evidence.toolLists.has(name)) continue;
-      const mechanical = item === "mcp.tools/list.result" ? mechanicalToolList(o.evidence, name, o.connectors) : undefined;
-      if (!mechanical && !o.provider) { missing.push({ item, connector: name, why: "No mechanical rule and no setup agent configured" }); continue; }
-      const filled = mechanical ?? await agentFill(o.provider!, item, name, o.corpus);
+      if (!o.provider) { missing.push({ item, connector: name, why: "No setup agent configured" }); continue; }
+      const filled = await agentFill(o.provider, item, name, o.corpus);
       if ("why" in filled) { missing.push(filled); continue; }
       add(filled);
       const value = object(filled.value);
@@ -121,23 +110,6 @@ export async function fillGaps(o: {
     const derived = deriveResult(call.text.text, location);
     if (derived.ok) add(derived.fill);
     else missing.push({ item: "mcp.tools/call.result", connector: call.connector, at: location.at, why: derived.why });
-  }
-  const recorded = new Map<string, number>();
-  for (const call of o.evidence.mcp) if ((call.result || call.text) && call.op.startsWith("tools/call:")) {
-    const key = canonicalJson([call.connector, call.op, object(call.request.params).arguments ?? {}]);
-    recorded.set(key, (recorded.get(key) ?? 0) + 1);
-  }
-  for (const use of o.evidence.toolUses) {
-    const target = attributeToolUse(use, o.evidence, tools);
-    if (!target) continue;
-    const key = canonicalJson([target.connector, `tools/call:${target.tool}`, use.args]);
-    if (recorded.get(key)) { recorded.set(key, recorded.get(key)! - 1); continue; }
-    const at = eventId(use.event), item = "mcp.tools/call.result";
-    if (!use.result) { missing.push({ item, connector: target.connector, at, why: `The run holds no result for tool use ${use.id ?? use.name}` }); continue; }
-    const location = { evidence: `event:${eventId(use.result.event)}#${use.id}`, connector: target.connector, at };
-    const derived = deriveResult(use.result.text, location);
-    if (derived.ok) add(derived.fill);
-    else missing.push({ item, connector: target.connector, at, why: derived.why });
   }
   return { fills, missing };
 }

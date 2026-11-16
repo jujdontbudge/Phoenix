@@ -22,7 +22,7 @@ export async function executable(name: string, path = process.env.PATH ?? ""): P
 
 export async function applyRecipe(options: {
   cwd: string; runtime: string; entry: string; recipe: RecipeDescriptor; contract: HarnessContract;
-  routes: string[]; env: NodeJS.ProcessEnv; modelUrl?: string;
+  routes: string[]; env: NodeJS.ProcessEnv;
 }) {
   const { recipe, contract, routes, runtime, entry } = options;
   const env: NodeJS.ProcessEnv = { ...options.env }, bin = join(runtime, "bin");
@@ -35,7 +35,6 @@ export async function applyRecipe(options: {
     await writeFile(join(bin, name), `#!${process.execPath}\nimport { main } from ${JSON.stringify(entry)};\nawait main(["cli-shim", ${JSON.stringify(name)}, ${JSON.stringify(real)}, ...process.argv.slice(2)]);\n`, { mode: 0o700 });
   }
   env.PATH = `${bin}${delimiter}${options.env.PATH ?? ""}`;
-  if (options.modelUrl && routes.includes("gateway") && contract.endpoints) env[contract.endpoints.model.env] = options.modelUrl;
   let cwd = options.cwd;
   const mcp = contract.endpoints?.mcp ?? recipe.mcp;
   if (mcp && routes.includes("mcp-proxy")) {
@@ -45,7 +44,7 @@ export async function applyRecipe(options: {
     const config = JSON.parse(await readFile(resolve(options.cwd, mcp.file), "utf8")) as { mcpServers: Record<string, { command?: string; args?: string[]; env?: Record<string, string>; url?: string }> };
     for (const [name, server] of Object.entries(config.mcpServers)) {
       if (server.command) config.mcpServers[name] = { ...server, command: process.execPath, args: [entry, "mcp-proxy", name, "--", server.command, ...server.args ?? []], env: { ...Object.fromEntries(["PATH", "PHOENIX_CAPTURE", "PHOENIX_COLLECTOR", "PHOENIX_HOME", "PHOENIX_CWD", "PHOENIX_COPY_IGNORED"].map(key => [key, env[key]!])), ...server.env } };
-      else throw new Error("Remote MCP needs an explicitly authorized gateway route; it is not silently rewritten");
+      else throw new Error(`The MCP proxy covers local (stdio) MCP servers only, and ${name} is a remote one`);
     }
     cwd = join(runtime, "cwd");
     const mirror = async (source: string, destination: string, configPath: string): Promise<void> => {

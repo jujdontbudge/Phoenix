@@ -28,7 +28,7 @@ routes:
   - versions: "0.1.0 || 0.1.4"
     login_mode: claude-api-key
     surfaces: &claude
-      model: [gateway, transcript]
+      model: [transcript]
       mcp: [mcp-proxy, transcript]
       cli: [cli-proxy, transcript]
   - {versions: "0.1.0 || 0.1.4", login_mode: claude-subscription, surfaces: *claude}
@@ -62,9 +62,6 @@ routes:
   - {versions: "0.1.0 || 0.1.4", login_mode: antigravity-agent-platform, surfaces: *fallback}
   - {versions: "0.1.0 || 0.1.4", login_mode: opencode-native, surfaces: *fallback}
   - {versions: "0.1.0 || 0.1.4", login_mode: acp-discovered, surfaces: *fallback}
-model:
-  setting: providerInstances.<instance>.environment; ANTHROPIC_BASE_URL for native Claude, OPENAI_BASE_URL for native API-key Codex
-  dialect: anthropic-messages
 mcp:
   file: .mcp.json
   format: mcpServers

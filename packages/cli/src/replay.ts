@@ -19,16 +19,15 @@ export async function runReplayCommand(args: string[]): Promise<number> {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     return result.verdict === "incomplete" ? 2 : result.meets_check ? 0 : 1;
   }
-  if ((command === "start" || command === "echo") && !id && values.request) {
+  if (command === "start" && !id && values.request) {
     const request = JSON.parse(await readFile(resolve(values.request), "utf8")) as ReplayRequest;
-    if (command === "echo") request.start = "echo";
     const replay = await runner.plan(request);
     process.stdout.write(JSON.stringify({ replay }) + "\n");
     const result = await runner.resume(replay);
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     return result.verdict === "incomplete" ? 2 : result.meets_check ? 0 : 1;
   }
-  throw new Error("Usage: phoenix replay <start|echo> --request <json> | <status|resume> <replay-id> [--home <dir>] [--ledger <file>]");
+  throw new Error("Usage: phoenix replay start --request <json> | <status|resume> <replay-id> [--home <dir>] [--ledger <file>]");
 }
 
 if (import.meta.main) {

@@ -1,9 +1,9 @@
 # Backend-driven listeners
 
-`mcpStdioTap`, `mcpHttpTap`, `cliTap`, and `httpGatewayTap` take a `Backend`.
+`mcpStdioTap`, `mcpHttpTap`, `cliTap`, and `httpTap` take a `Backend`.
 They do not start upstream processes, choose providers, record traffic, or resolve
 answers. The caller supplies those behaviors through `Backend.open`, and can wrap
-that backend with a tee. No tool or model body is parsed on the relay path.
+that backend with a tee. No tool body is parsed on the relay path. Taps carry tool traffic only; nothing here sits between a harness and its LLM.
 
 `open` is synchronous and returns a bidirectional `Link`. `write` accepts outbound
 frames; `frames` yields inbound frames until the connection ends or throws on an
@@ -37,7 +37,7 @@ signal. Call it after `cliTap` has removed its signal listeners.
 
 ## HTTP and MCP Streamable HTTP
 
-`httpHandler` can be mounted in an existing server. The gateway and MCP helpers
+`httpHandler` can be mounted in an existing server. `httpTap` and `mcpHttpTap`
 return an unbound Node server; the caller chooses its address and port. Each
 request opens one link, including standalone GET, DELETE, and request-scoped SSE.
 Sessions, event IDs, authorization and cancellation messages are opaque traffic.

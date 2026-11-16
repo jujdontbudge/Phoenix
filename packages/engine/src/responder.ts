@@ -34,7 +34,6 @@ export interface Responder {
   policy: ConnectorPolicy;
   history(): readonly string[];
   respond(call: Call): Promise<Answer | undefined>;
-  advance(answer: Answer): Promise<void>;
   diverge(divergence: Divergence): Promise<void>;
   interrupt(error: unknown): Promise<void>;
 }

@@ -55,22 +55,12 @@ async function execute(file, args, env, cwd) {
   return { code, signal, stdout: Buffer.concat(out).toString(), stderr: Buffer.concat(err).toString() };
 }
 
-test("S1 built-in OpenAI gateway disables WebSocket attempts", async () => {
-  const upstream = await origin();
-  const f = await fixture(`model="gpt-6.1-sol"\nopenai_base_url=${JSON.stringify(upstream.url)}\nmodel_reasoning_effort="low"`);
-  try {
-    const result = await execute(process.execPath, [join(recipe, "capture.ts"), "--login-mode", "api-key", "--routes", "gateway", "--cwd", f.cwd, "--", "exec", "--skip-git-repo-check", "synthetic transport probe"], f.env, f.cwd);
-    console.log(JSON.stringify({ code: result.code, signal: result.signal, requests: upstream.requests }));
-    assert.equal(upstream.requests.filter(r => r.upgrade?.toLowerCase() === "websocket").length, 0, "gateway transport override must prevent unsupported WebSocket requests");
-  } finally { await f.close(); await upstream.close(); }
-});
-
-test("S2 attached short config override cannot bypass the selected gateway", async () => {
+test("S2 attached short config override cannot bypass the selected provider", async () => {
   const upstream = await origin(), bypass = await origin();
   const f = await fixture(`model="gpt-6.1-sol"\nmodel_provider="synthetic"\n[model_providers.synthetic]\nname="Synthetic local router"\nbase_url=${JSON.stringify(upstream.url)}\nwire_api="responses"\nsupports_websockets=false`);
   try {
-    const result = await execute(process.execPath, [join(recipe, "capture.ts"), "--login-mode", "local", "--routes", "gateway", "--cwd", f.cwd, "--", "exec", `-cmodel_providers.synthetic.base_url=${JSON.stringify(bypass.url)}`, "--skip-git-repo-check", "synthetic override probe"], f.env, f.cwd);
-    console.log(JSON.stringify({ code: result.code, signal: result.signal, gatewayUpstream: upstream.requests, bypass: bypass.requests }));
+    const result = await execute(process.execPath, [join(recipe, "capture.ts"), "--login-mode", "local", "--routes", "transcript", "--cwd", f.cwd, "--", "exec", `-cmodel_providers.synthetic.base_url=${JSON.stringify(bypass.url)}`, "--skip-git-repo-check", "synthetic override probe"], f.env, f.cwd);
+    console.log(JSON.stringify({ code: result.code, signal: result.signal, selected: upstream.requests, bypass: bypass.requests }));
     assert.equal(bypass.requests.length, 0, "attached -c must be refused just like separated -c, before it changes the selected route");
   } finally { await f.close(); await upstream.close(); await bypass.close(); }
 });

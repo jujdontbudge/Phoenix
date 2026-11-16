@@ -38,7 +38,7 @@ test('S1: an unseen CLI invocation accepts a valid synthesized exit and emits it
     evidence: { events, body: async event => Buffer.from(event.body.inline) },
     connectors: { 'review-cli': { allow_synthesized: true, read_only: [{ op: 'review-tool', source: 'plugin' }] } },
     simulator: { moment: 'synthetic-cli-review', provider, improverModel: 'review-improver', store: new SimulatorStore(join(root, 'simulator')) },
-    start: 'beginning', routes: {}, hmacKey: Buffer.alloc(32, 1),
+    routes: {}, hmacKey: Buffer.alloc(32, 1),
     sample: { root: join(root, 'sample'), metadata: { capture: 'sample', harness: { name: 'review', tree: 'none' },
       recipe: { name: 'review', version: '1' }, routes: ['replay'], started_at: '2026-11-15T00:00:00Z', boot_id: 'review' } },
   });

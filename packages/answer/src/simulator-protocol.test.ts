@@ -45,7 +45,7 @@ async function replay(t: TestContext, version: string, schema: object, recorded:
   const index = await buildIndex(events, { body: async event => {
     assert.ok(event.body && "inline" in event.body);
     return Buffer.from(event.body.inline);
-  }, policy, start: "beginning" });
+  }, policy });
   const ctx = replayCtx(index, policy, undefined, { moment: "protocol-review", provider, improverModel: "test-improver", store: new SimulatorStore(root), clock: () => index.cutTime });
   const args = { query: "unseen" };
   return answerCall(toCall({ surface: "mcp", connector: "lookup", op: "tools/call:lookup", args, raw: { body: encodeMcp({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "lookup", arguments: args, _meta: meta } }) } }, policy()), ctx);

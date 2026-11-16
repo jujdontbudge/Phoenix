@@ -24,7 +24,7 @@ test('S6: a recompressed recorded HTTP body must have the correct Content-Length
   }));
   const engine = await startEngine({
     evidence: { events, body: async event => Buffer.from(event.body.inline) },
-    start: 'beginning', routes: {}, hmacKey: Buffer.alloc(32, 1),
+    routes: {}, hmacKey: Buffer.alloc(32, 1),
     connectors: { vendor: { surface: 'http', read_only: [{ op: 'GET vendor.example/items', source: 'http-safe-method' }] } },
     sample: { root: join(root, 'sample'), metadata: { capture: 'sample',
       harness: { name: 'review', tree: 'none' }, recipe: { name: 'review', version: '1' },

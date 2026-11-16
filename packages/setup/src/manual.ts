@@ -5,7 +5,7 @@ import { validate, type MomentManifest, type TraceEvent, type WorkdirSnapshot } 
 import { BlobStore, readCapture, writeMomentBundle } from "@phoenix/store";
 import { autoLock } from "@phoenix/approvals";
 
-type Start = "beginning" | "mark" | { at: string };
+type Start = "beginning" | "mark";
 type Surface = "mcp" | "cli" | "http";
 
 const eventId = (e: TraceEvent) => e.id ?? `${e.stream}:${e.seq}`;
@@ -83,11 +83,6 @@ export async function prepareSnapshotMoment(o: Omit<SnapshotMomentOptions, "out"
   const markIndex = ids.indexOf(o.mark);
   if (markIndex < 0) throw new Error(`Mark is not an event in this run: ${o.mark}`);
   const start = o.start ?? "mark";
-  if (typeof start === "object") {
-    const at = ids.indexOf(start.at);
-    if (at < 0) throw new Error(`Start point is not an event in this run: ${start.at}`);
-    if (at > markIndex) throw new Error(`Start point ${start.at} is after the mark ${o.mark}`);
-  }
 
   let check: string;
   if (o.check !== undefined) check = checkDraft(await readFile(o.check, "utf8"));
@@ -162,8 +157,8 @@ export async function createScenarioMoment(o: { from: string; out: string; home:
   if (manifest.source !== "scenario") throw new Error("A Scenario's moment.yaml must say source: scenario");
   for (const [name, connector] of Object.entries(manifest.connectors ?? {}))
     if (connector.origin !== "seeded") throw new Error(`Scenario data is seeded, never captured: connector ${name}`);
-  if (manifest.start !== undefined && manifest.start !== "beginning" && manifest.mark === undefined)
-    throw new Error("A Scenario with no staged run starts only from the beginning");
+  if (manifest.start !== undefined && manifest.start !== "beginning")
+    throw new Error("A Scenario replays from the beginning only: Phoenix does not replay recorded LLM traffic to reach a later point");
   const files = new Map<string, Uint8Array>([["check.draft.yaml", Buffer.from(checkDraft(await readFile(join(o.from, "check.draft.yaml"), "utf8")))]]);
   for (const path of [...await seedFiles(o.from, "data"), ...await seedFiles(o.from, "checks")]) files.set(path, await readFile(join(o.from, path)));
   await writeMomentBundle(o.out, { manifest, files });

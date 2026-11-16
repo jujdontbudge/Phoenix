@@ -1,5 +1,5 @@
 import { validate, type TraceEvent, type ReplayResult } from "@phoenix/formats";
-import { decodeMcpHttp, modelDialects, object } from "@phoenix/wire";
+import { decodeMcpHttp, object } from "@phoenix/wire";
 
 export type Tier = NonNullable<ReplayResult["fidelity_grade"]>;
 export interface ConnectorContext {
@@ -13,7 +13,6 @@ export interface FidelityContext {
   source: "snapshot" | "scenario";
   connectors: Record<string, ConnectorContext>;
   start: ReplayResult["start"];
-  prefix_edits: ReplayResult["prefix_edits"];
   container_runtime: string;
   clock: unknown;
   processes: { path: string; clock: "virtual" | "real" | "unknown" }[];
@@ -35,7 +34,6 @@ export interface FidelityReport {
   connectors: ConnectorReport[];
   unused: string[];
   answers: ReportItem[];
-  prefix_uncompared: ReportItem[];
   unverified_read_only: ReportItem[];
   stale: ReportItem[];
   divergences: ReportItem[];
@@ -65,7 +63,7 @@ export function responseTier(event: Pick<TraceEvent, "kind" | "provenance" | "re
 }
 
 export function fidelityReport(trace: readonly TraceEvent[], blobs: Readonly<Record<string, string>> = {}): FidelityReport {
-  const report: FidelityReport = { connectors: [], unused: [], answers: [], prefix_uncompared: [], unverified_read_only: [], stale: [], divergences: [], emulator_differences: [], format_mismatches: [], local_file_effects: [], workdir: [], gaps: [], unattributed: [], secrets: [], discounts: [], notes: [] };
+  const report: FidelityReport = { connectors: [], unused: [], answers: [], unverified_read_only: [], stale: [], divergences: [], emulator_differences: [], format_mismatches: [], local_file_effects: [], workdir: [], gaps: [], unattributed: [], secrets: [], discounts: [], notes: [] };
   const connectors = new Map<string, ConnectorReport>();
   const lastCall = new Map<string, string>();
   const rpcCalls = new Map<string, string>();
@@ -81,7 +79,7 @@ export function fidelityReport(trace: readonly TraceEvent[], blobs: Readonly<Rec
     if (event.kind === "meta" && event.op === "fidelity.context") {
       if (report.context) throw new Error("Duplicate fidelity context");
       const value = object(body(event));
-      if (!["snapshot", "scenario"].includes(value.source as string) || !value.connectors || typeof value.connectors !== "object" || !value.start || !Array.isArray(value.prefix_edits) || typeof value.container_runtime !== "string" || !Array.isArray(value.processes)) throw new Error("Invalid fidelity context");
+      if (!["snapshot", "scenario"].includes(value.source as string) || !value.connectors || typeof value.connectors !== "object" || !value.start || typeof value.container_runtime !== "string" || !Array.isArray(value.processes)) throw new Error("Invalid fidelity context");
       const context = value as unknown as FidelityContext;
       for (const [name, c] of Object.entries(context.connectors)) {
         const tier = weakestTier(c.plugin_tier ?? "recorded", c.coverage_tier);
@@ -93,7 +91,7 @@ export function fidelityReport(trace: readonly TraceEvent[], blobs: Readonly<Rec
     }
   }
   if (!report.context) report.notes.push("No fidelity.context event; connector ceilings and run context are unavailable, so undeclared connectors are capped at recorded");
-  const categories = ["prefix_uncompared", "unverified_read_only", "stale", "emulator_differences", "format_mismatches", "local_file_effects", "workdir", "gaps", "unattributed", "discounts", "answers"] as const;
+  const categories = ["unverified_read_only", "stale", "emulator_differences", "format_mismatches", "local_file_effects", "workdir", "gaps", "unattributed", "discounts", "answers"] as const;
   for (const event of trace) {
     const id = event.id ?? `${event.stream}:${event.seq}`;
     const item: ReportItem = { event: id, ...(event.connector ? { connector: event.connector } : {}) };
@@ -104,8 +102,7 @@ export function fidelityReport(trace: readonly TraceEvent[], blobs: Readonly<Rec
     if (event.kind === "gap" || event.dropped || event.partial) report.gaps.push({ ...item, detail: { kind: event.kind, dropped: event.dropped, partial: event.partial } });
     if (event.secrets === "unscanned" || event.secrets?.length) report.secrets.push({ ...item, detail: event.secrets });
     if (event.kind === "divergence") report.divergences.push({ ...item, detail: event.body ? body(event) : event.op });
-    const [method, ...path] = (event.op ?? "").split(" ");
-    if (!event.connector || event.layer === "under" || Object.values(modelDialects).some(d => d.isInference(method ?? "", path.join(" ")))) continue;
+    if (!event.connector || event.layer === "under") continue;
     if (!["call", "result", "divergence"].includes(event.kind)) continue;
     let connector = connectors.get(event.connector);
     if (!connector) {

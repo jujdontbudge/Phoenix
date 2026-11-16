@@ -10,7 +10,6 @@
     "check",
     "ledger_entry",
     "start",
-    "prefix_edits",
     "samples",
     "tiebreak_ran",
     "verdict",
@@ -102,43 +101,10 @@
       ]
     },
     "start": {
-      "oneOf": [
-        {
-          "enum": [
-            "beginning",
-            "mark",
-            "echo"
-          ]
-        },
-        {
-          "type": "object",
-          "required": [
-            "at"
-          ],
-          "properties": {
-            "at": {
-              "type": "string",
-              "minLength": 1,
-              "description": "An event id within a capture."
-            }
-          }
-        }
+      "enum": [
+        "beginning",
+        "mark"
       ]
-    },
-    "prefix_edits": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "field"
-        ],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "The configuration field that differs from the recording."
-          }
-        }
-      }
     },
     "samples": {
       "type": "array",
@@ -176,18 +142,50 @@
           "answers": {
             "type": "object",
             "description": "Where each tool answer in the sample's last attempt came from.",
-            "required": ["session", "files_copy", "working_copy", "made_up", "made_up_calls"],
+            "required": [
+              "session",
+              "files_copy",
+              "working_copy",
+              "made_up",
+              "made_up_calls"
+            ],
             "properties": {
-              "session": { "type": "integer", "minimum": 0, "description": "Answered from the session's own recorded results." },
-              "files_copy": { "type": "integer", "minimum": 0, "description": "Run for real inside the box, on the copy of the project's files." },
-              "working_copy": { "type": "integer", "minimum": 0, "description": "Answered by a service's working copy, such as the calendar plugin." },
-              "made_up": { "type": "integer", "minimum": 0, "description": "Made up by the simulator LLM. Never real." },
+              "session": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Answered from the session's own recorded results."
+              },
+              "files_copy": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Run for real inside the box, on the copy of the project's files."
+              },
+              "working_copy": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Answered by a service's working copy, such as the calendar plugin."
+              },
+              "made_up": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Made up by the simulator LLM. Never real."
+              },
               "made_up_calls": {
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["connector", "op"],
-                  "properties": { "connector": { "type": "string" }, "op": { "type": "string" } }
+                  "required": [
+                    "connector",
+                    "op"
+                  ],
+                  "properties": {
+                    "connector": {
+                      "type": "string"
+                    },
+                    "op": {
+                      "type": "string"
+                    }
+                  }
                 }
               },
               "after_untaken_write_calls": {
@@ -195,8 +193,18 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["connector", "op"],
-                  "properties": { "connector": { "type": "string" }, "op": { "type": "string" } }
+                  "required": [
+                    "connector",
+                    "op"
+                  ],
+                  "properties": {
+                    "connector": {
+                      "type": "string"
+                    },
+                    "op": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -286,12 +294,31 @@
     "files_copy": {
       "type": "object",
       "description": "Which copy of the project's files the box used.",
-      "required": ["source", "taken_at"],
+      "required": [
+        "source",
+        "taken_at"
+      ],
       "properties": {
-        "source": { "enum": ["git", "today", "mark"], "description": "git: as committed at the moment's time. today: as the files were when the moment was made. mark: as saved at the mark." },
-        "commit": { "type": "string" },
-        "taken_at": { "type": "string", "format": "date-time" },
-        "left_out": { "type": "integer", "minimum": 0, "description": "How many files Phoenix could not read when it made the copy. They are missing inside the box." }
+        "source": {
+          "enum": [
+            "git",
+            "today",
+            "mark"
+          ],
+          "description": "git: as committed at the moment's time. today: as the files were when the moment was made. mark: as saved at the mark."
+        },
+        "commit": {
+          "type": "string"
+        },
+        "taken_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "left_out": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many files Phoenix could not read when it made the copy. They are missing inside the box."
+        }
       }
     },
     "baseline": {

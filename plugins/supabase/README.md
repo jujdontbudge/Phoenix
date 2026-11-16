@@ -44,6 +44,14 @@ docker build --build-arg PG_IMAGE=supabase/postgres:17.6.1.166 -t phoenix-supaba
 
 The serve command refuses a snapshot from another Postgres major version. The image runs as the `postgres` user, because Postgres will not start as root.
 
+## Tests
+
+The tests in `test/` start Supabase's own Postgres, so they run only inside the plugin image. On a plain checkout they are skipped, and the run prints why. Build the image as above, then run them in it from the repository root. Mount the whole checkout, because the plugin's installed packages link to the repository's `node_modules`:
+
+```sh
+docker run --rm -v "$PWD:/repo:ro" -w /repo/plugins/supabase phoenix-supabase:17 node --test "test/*.test.mjs"
+```
+
 ## Read-only tools
 
 `phoenix-plugin.json` lists the tools the server shows for one project, in read-only and read-write mode. It marks the 14 tools that only read as read-only. `execute_sql`, `apply_migration`, `run_notebook` and the branch, edge function and notebook tools that change something are not read-only.
@@ -57,6 +65,6 @@ Side by side with the real Supabase (48 calls on a real project), the copy's ans
 
 - Creating an extension the project has not installed: the copy runs the agent's SQL as Supabase's own non-superuser roles, without Supabase's extension helper, so an extension such as `dblink` is refused with "Must be superuser".
 
-Merged with a gap (JOH-62 stays open): a session recorded through Johan's launcher itself was never seen. Its token is rejected and its project is paused. The moment used in the proofs was recorded through a direct start of the same server version (0.17.0) with `--read-only`. A replay never starts the server, and it matches the copy by the server name `supabase`, the same name as the launcher entry.
+Merged with a gap: a session recorded through Johan's launcher itself was never seen, and Supabase work has stopped, so it never will be. Its token is rejected and its project is paused. The moment used in the proofs was recorded through a direct start of the same server version (0.17.0) with `--read-only`. A replay never starts the server, and it matches the copy by the server name `supabase`, the same name as the launcher entry.
 
 Not compared with the real thing: a write on the real Supabase. Nothing was ever written to a real project. The write answers were compared with a real Supabase Postgres 17.6 instead. The read-write mode was only seen on a moment whose read-only setting was changed by hand. Johan's own settings run Supabase read-only.

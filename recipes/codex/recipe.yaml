@@ -15,7 +15,7 @@ routes:
   - versions: "0.169.0"
     login_mode: chatgpt-custom-provider
     surfaces: &http
-      model: [gateway, transcript]
+      model: [transcript]
       mcp: [mcp-proxy, transcript]
       cli: [cli-proxy, transcript]
   - versions: "0.169.0"
@@ -36,9 +36,6 @@ routes:
   - versions: "0.169.0"
     login_mode: vertex
     surfaces: *native
-model:
-  setting: model_providers.<active-custom-provider>.base_url
-  dialect: openai-responses
 mcp:
   file: ~/.codex/config.toml
   format: mcp_servers (TOML)
@@ -58,14 +55,13 @@ resume:
   llm_hosts:
     chatgpt: [chatgpt.com]
 limitations:
-  - Gateway is explicit HTTP/SSE capture for an already selected custom provider; built-in OpenAI ignores the WebSocket disable override and falls back to transcripts
+  - Phoenix never sits between Codex and its LLM; the LLM side comes only from Codex's own session file
   - No authentication or billing route is changed; a failed explicit route is refused instead of silently replaced
-  - Project-local .codex/config.toml layers require transcript capture or explicit import; live model and MCP routing are refused
+  - Project-local .codex/config.toml layers require transcript capture or explicit import; live MCP routing is refused
   - Command-line config/profile/cwd overrides are refused; use the recipe's --cwd to choose the snapshotted task directory
   - Remote MCP URLs are rewritten only with --reverse-mcp naming servers whose authorization remains valid at a loopback URL
   - Remote OAuth, ChatGPT-bound MCP, managed restrictions, native Bedrock signing and Vertex credentials fall back to transcripts
   - Transcripts are model-visible items, not HTTP exchanges, complete tool catalogs, MCP protocol envelopes, raw CLI streams or filesystem side effects
-  - Model responses ending before transport EOF remain partial even if response.completed was observed
   - Absolute commands, shell builtins, reset shell PATH, dynamic/plugin MCP servers and direct HTTP calls can bypass live capture
   - MCP servers with an explicit PATH keep their executable resolution and bypass the generic CLI shims
   - Static Linux builds may use the real clock; clock coverage is informational, not a fidelity penalty

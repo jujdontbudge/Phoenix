@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -52,7 +53,11 @@ export async function runMomentSessionCommand(args: string[]): Promise<number> {
   });
   const identity = `import-${digest(Buffer.from(JSON.stringify([reader.recipe.name, resolve(session!)]))).slice(7)}`;
   const capture = await transcriptCapture({ "--home": home }, identity, reader.recipe.name, reader.recipe.name);
-  const imported = await importTranscript({ ...capture, source: session!, reader });
+  let imported = await importTranscript({ ...capture, source: session!, reader });
+  if (!imported.complete && !imported.added) {
+    await rm(join(capture.root, imported.segment));
+    imported = await importTranscript({ ...capture, source: session!, reader });
+  }
   if (!imported.complete) throw new Error(`The ${reader.recipe.name} transcript reader could not read all of the session: ${imported.issues.map(i => i.reason).join("; ")}`);
   for (const answer of answers) {
     const { msg } = await stripSecrets({ body: Buffer.from(JSON.stringify(answer.result)) }, capture.policy);
