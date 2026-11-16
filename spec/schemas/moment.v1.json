@@ -437,6 +437,11 @@
               "format": "date-time",
               "description": "When the files in the copy were current."
             },
+            "home": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The home folder on the machine where the session ran. A leading ~ in a new shell command means this folder."
+            },
             "more": {
               "type": "array",
               "items": { "type": "string" },

@@ -1,10 +1,19 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createBashToolDefinition, createEditToolDefinition, createFindToolDefinition, createGrepToolDefinition, createLsToolDefinition, createReadToolDefinition, createWriteToolDefinition } from "@earendil-works/pi-coding-agent";
 import { adapterCall, withoutNulls } from "./adapter.mjs";
 
 const loadout = JSON.parse(readFileSync(process.env.PHOENIX_PI_LOADOUT, "utf8"));
 const url = process.env.PHOENIX_TOOLS_URL;
 const builtin = { bash: createBashToolDefinition, read: createReadToolDefinition, write: createWriteToolDefinition, edit: createEditToolDefinition, ls: createLsToolDefinition, grep: createGrepToolDefinition, find: createFindToolDefinition };
+const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+const printing = folder => ({ command, outputs }) => command.replace(/\u0000(\d+)\u0000/g, (_, i) => {
+  const out = join(folder, i + ".out"), err = join(folder, i + ".err");
+  writeFileSync(out, outputs[i].stdout);
+  writeFileSync(err, outputs[i].stderr);
+  return "(cat " + quote(out) + "; cat " + quote(err) + " >&2; exit " + outputs[i].exit_code + ")";
+});
 const unwrap = (name, text) => text.startsWith(`<${name}>\n`) && text.endsWith(`\n</${name}>`) ? text.slice(name.length + 3, -(name.length + 4)) : text;
 
 export default function standIn(pi) {
@@ -32,6 +41,10 @@ export default function standIn(pi) {
           await ask("phoenix/ran", { result: failure ? { content: [{ type: "text", text: failure.message }], isError: true } : { content: result.content, isError: false, details: result.details ?? {} } });
           if (failure) throw failure;
           return result;
+        }
+        if (reply.command_output && tool.name === "bash") {
+          const folder = mkdtempSync(join(tmpdir(), "phoenix-output-"));
+          return builtin.bash(process.cwd()).execute(toolCallId, { ...params, command: printing(folder)(reply.command_output) }, signal, onUpdate, ctx);
         }
         if (reply.error) throw new Error(`Phoenix stopped this replay: ${reply.error.message}`);
         if (reply.result.isError) throw new Error(reply.result.content.map(block => block.text ?? "").join("\n"));

@@ -40,7 +40,7 @@ const SED_PRINT = /^\s*(\d+|\$)?\s*(,\s*(\d+|\$)\s*)?p\s*$/;
 type Word = { text: string };
 type Token = Word | { op: string };
 
-function lex(command: string): Token[] | undefined {
+export function lex(command: string, home?: string): Token[] | undefined {
   const tokens: Token[] = [];
   let word: Word | undefined;
   const end = () => { if (word) tokens.push(word); word = undefined; };
@@ -70,7 +70,8 @@ function lex(command: string): Token[] | undefined {
       let op = c === "\n" ? ";" : c;
       while (at + 1 < command.length && "|&<>".includes(command[at + 1]!) && op.length < 2) op += command[++at];
       tokens.push({ op: fd + op });
-    } else if ("$`(){}#*?[~".includes(c)) return undefined;
+    } else if (c === "~" && home && !word && (at + 1 === command.length || "/ \t|&;<>\n".includes(command[at + 1]!))) word = { text: home };
+    else if ("$`(){}#*?[~".includes(c)) return undefined;
     else word = { text: (word?.text ?? "") + c };
   }
   end();
